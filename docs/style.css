@@ -23,3 +23,16 @@
 
 #jump{font-size:10px;border:1px solid #8eaa97;border-radius:14px;padding:4px 10px;margin-top:7px;background:#e0e6d7}#jump[aria-pressed="true"]{background:#173e31;color:#f3f0e5}#pad #swingfeedback{font-size:9px;margin:4px 0;color:#e3b66b}.swing-guide{height:3px;background:#ffffff18;position:relative;margin:6px auto;width:70%}.swing-guide:before{content:'';position:absolute;left:50%;height:7px;width:1px;top:-2px;background:#fff8}.swing-guide i{position:absolute;width:5px;height:5px;background:#e3b66b;border-radius:50%;left:calc(50% + var(--drift,0%));top:-1px;transform:translateX(-50%)}
 @media(max-width:680px){.shotpanel{min-height:225px}#world{bottom:315px}.live{bottom:320px}#pad{padding:8px 12px}#pad #swingfeedback{font-size:8px}#jump{font-size:9px}}
+
+/* A compact mobile swing dock leaves the lawn as the main view. */
+@media(max-width:680px){
+ .shotpanel,.shotpanel:has(#contactcontrols:not([hidden])),.shotpanel:has(#ballchoices:not([hidden])){min-height:0;padding:10px 12px}
+ .shotpanel .turn{gap:8px}.shotpanel #turntitle,.shotpanel #hint{display:none}
+ .shotpanel h1,.desktop-shot .shotpanel h1{font-size:17px;line-height:20px;margin:0}
+ .shotpanel #ballbadge{width:18px;height:18px}.shotcontrols{margin-top:8px;gap:12px}
+ .aim-control input{margin:8px 0}.distance{font-size:8px;line-height:1.25}
+ #pad{padding:8px 10px;min-height:96px}#pad .pad-icon{display:none}#pad b{font-size:8px;letter-spacing:1px;margin-top:0}#pad small{font-size:8px;margin:5px 0;line-height:1.25}
+ #jump{margin-top:5px;padding:5px 9px}#world{bottom:245px}.live{bottom:250px}
+ #ballchoices{margin-top:6px}#contactcontrols{margin-top:6px}
+}
+.rule-guide{margin:18px 0}.rule-guide details{border-top:1px solid #173e3133;padding:12px 0}.rule-guide summary{font-size:14px;font-weight:700;cursor:pointer;min-height:24px}.rule-guide p{margin-top:9px}.rule-guide .note{margin-top:10px}
