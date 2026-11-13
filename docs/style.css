@@ -38,3 +38,5 @@
 .rule-guide{margin:18px 0}.rule-guide details{border-top:1px solid #173e3133;padding:12px 0}.rule-guide summary{font-size:14px;font-weight:700;cursor:pointer;min-height:24px}.rule-guide p{margin-top:9px}.rule-guide .note{margin-top:10px}
 
 body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}button,canvas,#pad,input[type="range"]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#helpdialog{-webkit-user-select:text;user-select:text}
+
+.multiplayer .scoreboard #them{font:600 10px/1.6 'DM Sans',Arial,sans-serif;white-space:normal}.multiplayer .scoreboard>div:last-child{max-width:190px}.multiplayer .scoreboard>div:first-child .dot.black{display:none}footer select[hidden]{display:none}@media(max-width:680px){footer #players{max-width:130px}.multiplayer .scoreboard>div:last-child{display:block}.multiplayer .scoreboard #them{font-size:9px}}
