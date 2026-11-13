@@ -9,3 +9,5 @@ export function wicketHeading(ball,target){return Math.atan2(target.x-ball.x,tar
 // that returns to the centre before release. Allow a few pixels of hand jitter.
 export function trackSwing(drag,event){const cross=drag.desktop?event.clientY-drag.y:event.clientX-drag.x;if(Math.abs(cross)>Math.abs(drag.cross||0))drag.cross=cross;drag.travel=Math.max(drag.travel||0,drag.desktop?drag.x-event.clientX:event.clientY-drag.y);return swingError(drag)}
 export function swingError(drag){const cross=drag.cross||0,drift=Math.sign(cross)*Math.max(0,Math.abs(cross)-4);return Math.max(-Math.PI/22.5,Math.min(Math.PI/22.5,Math.atan2(drift,Math.max(80,drag.travel||0))*.65))}
+
+export function shotAimTarget(balls,courseTarget,croquetTarget=null){return croquetTarget!==null&&croquetTarget!==undefined?balls[croquetTarget]:courseTarget}
