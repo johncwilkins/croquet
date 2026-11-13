@@ -7,8 +7,21 @@ export function createGrounds(scene,renderer){
  const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=renderer.capabilities?.getMaxAnisotropy?.()||1;return t}
  const turf=texture('turf','#688254','#547247');turf.repeat.set(12,15);const grass=new THREE.MeshStandardMaterial({color:'#91a476',map:turf,bumpMap:turf,bumpScale:.025,roughness:1});
  const ground=new THREE.Mesh(new THREE.BoxGeometry(28,.15,35),grass);ground.position.y=-.09;ground.receiveShadow=true;scene.add(ground);
- // A light cut pattern over fine-grained turf, without hard geometric bands.
- for(let i=0;i<14;i++){const stripe=new THREE.Mesh(new THREE.PlaneGeometry(2,35),new THREE.MeshStandardMaterial({color:i%2?'#a7ba7c':'#43643a',transparent:true,opacity:.055,depthWrite:false,roughness:1}));stripe.rotation.x=-Math.PI/2;stripe.position.set(-13+i*2,-.012,0);stripe.receiveShadow=true;scene.add(stripe)}
+ // Whole-court mowing directions over the existing fine grass texture.
+ const cutCanvas=document.createElement('canvas');cutCanvas.width=cutCanvas.height=512;
+ const cutTexture=new THREE.CanvasTexture(cutCanvas);cutTexture.colorSpace=THREE.SRGBColorSpace;
+ const cut=new THREE.Mesh(new THREE.PlaneGeometry(28,35),new THREE.MeshStandardMaterial({map:cutTexture,color:'#608048',transparent:true,opacity:.24,depthWrite:false,roughness:1}));cut.rotation.x=-Math.PI/2;cut.position.y=-.011;cut.receiveShadow=true;scene.add(cut);
+ const patterns=['Tournament stripes','Crosscut checks','Diamond cut','Concentric rings','Chevron cut'];let lastPattern=-1;
+ function randomizeLawn(){const count=patterns.length;lastPattern=lastPattern<0?Math.floor(Math.random()*count):(lastPattern+1+Math.floor(Math.random()*(count-1)))%count;
+ const c=cutCanvas.getContext('2d'),image=c.createImageData(512,512),data=image.data;
+ for(let y=0;y<512;y++)for(let x=0;x<512;x++){const u=x/512*28,v=y/512*35;let band;
+ if(lastPattern===0)band=Math.floor(u/3.5);
+ else if(lastPattern===1)band=Math.floor(u/3.5)+Math.floor(v/3.5);
+ else if(lastPattern===2)band=Math.floor((u+v)/4)+Math.floor((u-v)/4);
+ else if(lastPattern===3)band=Math.floor(Math.hypot(u-14,(v-17.5)*.8)/2);
+ else band=Math.floor((v+Math.abs(u-14)*.8)/3);
+ const light=((band%2)+2)%2===0,i=(y*512+x)*4;data[i]=light?193:29;data[i+1]=light?210:65;data[i+2]=light?132:33;data[i+3]=255;}
+ c.putImageData(image,0,0);cutTexture.needsUpdate=true;renderer.lastKey='';return patterns[lastPattern]}
  const settings={english:{title:'English Cottage',sky:'#bfd1d4',fog:'#bfd1d4'},nantucket:{title:'Nantucket Village',sky:'#c5deeb',fog:'#c5deeb'},resort:{title:'Country Club Resort',sky:'#c6dce5',fog:'#c6dce5'}};
  const groups={};
  function material(color,map=null){return new THREE.MeshStandardMaterial({color,map,roughness:.9})}
@@ -24,5 +37,5 @@ export function createGrounds(scene,renderer){
  if(name==='nantucket'){for(let i=0;i<4;i++)cottage(g,-17+i*11,-33,(i-1.5)*-.04,'nantucket',1.05);cottage(g,-29,-8,Math.PI/2,'nantucket',1.2);box(g,43,.1,3,material('#c5bea8'),0,-.02,-24);for(let x=-20;x<23;x+=1){box(g,.11,.9,.11,trim,x,.45,-25.9)}for(const y of [.25,.7])box(g,43,.07,.08,trim,0,y,-25.9);for(const x of [-14,-6,7,17])flowers(g,x,-24.4,'#a5b3d0')}
  if(name==='resort'){const club=new THREE.Group();club.position.set(0,0,-34);g.add(club);box(club,26,5,8,material('#eee2c8'),0,2.5,0);roofGable(club,27,9,5.05,8,roof);box(club,29,.22,3,trim,0,3.9,5);for(let x=-13;x<=13;x+=3.25)cylinder(club,.13,3.9,trim,x,1.95,6);for(let x=-11;x<=11;x+=3.6)window(club,x,2.1,4.04,1.4,2);box(club,2,3,.15,timber,0,1.5,4.15);box(g,38,.1,4,material('#c8bba4'),0,0,-24);for(const x of [-17,17]){cylinder(g,.07,3.2,trim,x,1.6,-23);const shade=new THREE.Mesh(new THREE.ConeGeometry(2.2,.65,20),material('#efe8d3'));shade.position.set(x,3.2,-23);shade.castShadow=true;g.add(shade);box(g,1.6,.12,1.6,timber,x,1.1,-23)}for(const x of [-11,11])flowers(g,x,-25,'#e9e0c9')}
  }
- return {settings,set(name){if(!settings[name])return;Object.entries(groups).forEach(([key,g])=>g.visible=key===name);scene.background=new THREE.Color(settings[name].sky);scene.fog.color.set(settings[name].fog);renderer.lastKey='';},grass};
+ return {settings,randomizeLawn,set(name){if(!settings[name])return;Object.entries(groups).forEach(([key,g])=>g.visible=key===name);scene.background=new THREE.Color(settings[name].sky);scene.fog.color.set(settings[name].fog);renderer.lastKey='';},grass};
 }
