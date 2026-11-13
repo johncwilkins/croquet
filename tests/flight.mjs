@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {launchVelocity,airborne,advanceFlight,collideBalls,collideArch,collideUpright,R} from '../dist/flight.js';
+import {beginHoopStroke,trackHoopSegment} from '../dist/scoring.js';
+const ball=(x,z,y=R)=>({x,z,y,vx:0,vz:0,vy:0,entered:true});
+assert.deepEqual(launchVelocity(5,false),{horizontal:5,vertical:0});const launch=launchVelocity(5,true);assert(launch.vertical>2.4&&launch.horizontal<5);
+let b={...ball(0,0),vx:launch.horizontal,vy:launch.vertical},apex=0;for(let i=0;i<480;i++){b.x+=b.vx/240;advanceFlight(b,1/240);apex=Math.max(apex,b.y)}assert(apex>.4);assert.equal(b.y,R);assert(!airborne(b),'jump eventually settles');assert(b.x>2,'jump carries forward');
+let a=ball(0,0,.6),o=ball(0,0);a.vz=3;assert.equal(collideBalls(a,o),0);assert.equal(o.vz,0,'clean clearance leaves opponent untouched');a=ball(0,0,.3);a.vz=3;o=ball(0,.1);assert(collideBalls(a,o)>0);assert(o.vz>0,'low jump clips and moves opponent');
+a=ball(0,-.1,.9);a.vz=3;assert(collideArch(a,{x:0,z:0}));assert(a.vz<0,'crossbar sends a low jump back');a=ball(0,-.1,1.2);a.vz=3;assert(!collideArch(a,{x:0,z:0}),'high jump clears crossbar');a=ball(.33,-.1,1.2);a.vz=3;assert(!collideUpright(a,{x:.33,z:0,r:.045}),'high jump clears upright');
+const h={x:0,z:0,key:1,direction:1};a=ball(0,-.3,1.2);beginHoopStroke(a,h);let from={...a};a.z=.3;trackHoopSegment(a,from,h);assert(!a.candidate,'over the hoop is not a point');a=ball(0,-.3,.4);beginHoopStroke(a,h);from={...a};a.z=.3;trackHoopSegment(a,from,h);assert(a.candidate,'jump through the opening can score');
+// Integrate the actual game loop: a jump clears an opponent and lands;
+// a stronger jump flies over a wicket without scoring it.
+import fs from 'node:fs';import vm from 'node:vm';import * as flight from '../dist/flight.js';
+const source=fs.readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');const physicsSource=source.slice(source.indexOf('function grassInfluence'),source.indexOf('function finishShot'));
+function simulate(speed,opponentZ,hoopZ){const v=launchVelocity(speed,true),balls=[{...ball(0,0),vz:v.horizontal,vy:v.vertical,side:0},{...ball(0,opponentZ),side:1},{...ball(8,8),entered:false},{...ball(9,9),entered:false}];const hoop={x:0,z:hoopZ,key:1,direction:1};balls.forEach(b=>beginHoopStroke(b,hoop));const ctx={Math,R,F:2.2,THREE:{MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(b,v))}},balls,match:null,posts:[],hoopPos:[[0,hoopZ]],scoringHoop:()=>hoop,beep:()=>{},trackHoopSegment,...flight};vm.createContext(ctx);vm.runInContext(physicsSource,ctx);for(let i=0;i<2400;i++)ctx.physics(1/240);return balls}
+let balls=simulate(5,1,12);assert.equal(balls[1].z,1,'jump clears opponent in live physics');assert.equal(balls[0].y,R);assert(!airborne(balls[0]));balls=simulate(10,12,4);assert(!balls[0].candidate,'flying over the wicket never scores in live physics');console.log('PASS: launch, flight, landing, opponent clearance and clipping, hoop arch collisions, height-aware scoring and live jump physics');

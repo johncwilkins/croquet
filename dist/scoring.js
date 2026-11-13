@@ -9,7 +9,7 @@ export function beginHoopStroke(ball,hoop,r=BALL_RADIUS){const s=stateFor(ball,b
 export function trackHoopSegment(ball,from,hoop,r=BALL_RADIUS){const s=stateFor(ball,from,hoop,r),before=progress(from,hoop),after=progress(ball,hoop),delta=after-before,opening=HOOP_HALF_WIDTH-UPRIGHT_RADIUS-r;
  // Returning to a position before the ball starts running re-establishes eligibility,
  // except after first entering backwards during this same stroke (rule 7.5.4).
- if(Math.abs(delta)>1e-12&&((before<=0&&after>0)||(before>=0&&after<0))){const t=-before/delta,crossX=from.x+(ball.x-from.x)*t;if(Math.abs(crossX-hoop.x)<=opening+EPS){if(delta>0){if(s.eligible&&!s.wrongEntry)s.crossed=true}else{if(!s.eligible){s.wrongEntry=true}s.crossed=false;s.candidate=false}}}
+ if(Math.abs(delta)>1e-12&&((before<=0&&after>0)||(before>=0&&after<0))){const t=-before/delta,crossX=from.x+(ball.x-from.x)*t;const crossY=(from.y??r)+((ball.y??r)-(from.y??r))*t,arch=.57+Math.sqrt(Math.max(0,.33**2-(crossX-hoop.x)**2))-.045;if(Math.abs(crossX-hoop.x)<=opening+EPS&&crossY+r<=arch+EPS){if(delta>0){if(s.eligible&&!s.wrongEntry)s.crossed=true}else{if(!s.eligible){s.wrongEntry=true}s.crossed=false;s.candidate=false}}}
  if(after<=UPRIGHT_RADIUS-r+EPS&&!s.wrongEntry)s.eligible=true;
  if(s.crossed&&after>=r-UPRIGHT_RADIUS-EPS)s.candidate=true;
  // A rollback into the jaws cancels completion, but preserves a legitimate partial run.
