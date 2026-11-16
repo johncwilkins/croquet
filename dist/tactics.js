@@ -1,7 +1,7 @@
 import {beginHoopStroke,trackHoopSegment,hoopWinner} from './scoring.js';
 // Choose between a reliable hoop attempt, a clearance, a block, and an approach.
 const R=.14,F=2.2,MAX=15;
-export function shotUncertainty(power){return {angleSD:(.10+1.45*power*power)*Math.PI/180,speedSpread:.004+.014*power*power}}
+export function shotUncertainty(power,computer=false){return {angleSD:(.10+1.45*power*power)*Math.PI/180*(computer?1.25:1),speedSpread:(.004+.014*power*power)*(computer?1.2:1)}}
 function dot(a,b){return a.x*b.x+a.z*b.z}
 function distance(a,b){return Math.hypot(a.x-b.x,a.z-b.z)}
 function segmentDistance(p,a,b){const dx=b.x-a.x,dz=b.z-a.z,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.z-a.z)*dz)/(dx*dx+dz*dz||1)));return Math.hypot(p.x-a.x-t*dx,p.z-a.z-t*dz)}
