@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {heldPower,accuracyPosition,timingError,contactAngle,ACCURACY_MS} from '../dist/timed-swing.js';
+import {pullPower} from '../dist/shot-control.js';
 import {VariantMatch} from '../dist/variants.js';
 assert.equal(heldPower(1300),.5);assert.equal(heldPower(6000),1);
 assert.equal(accuracyPosition(800),0);assert.equal(timingError(.14),0);
@@ -9,13 +10,21 @@ assert.equal(timingError(-.14),0);assert(timingError(-.9)<0);assert(timingError(
 assert(Math.abs(timingError(1))<.105);
 const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{textContent:'',open:false,classList:{add(){},remove(){}},style:{setProperty(){}},getAttribute:()=> 'false'});return elements.get(id)};
 const source=readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');
-const scope=vm.createContext({$,heldPower,accuracyPosition,timingError,phase:'aim',human:()=>true,placing:false,swingStage:'idle',meterStart:0,spaceStart:0,drag:null,power:0,angle:0,shots:[],setPower(p){scope.power=p},strike(a,p,j){scope.shots.push({a,p,j})}});
+const scope=vm.createContext({$,desktopShot:true,pullPower,heldPower,accuracyPosition,timingError,phase:'aim',human:()=>true,placing:false,swingStage:'idle',meterStart:0,spaceStart:0,drag:null,power:0,angle:0,shots:[],setPower(p){scope.power=p},strike(a,p,j){scope.shots.push({a,p,j})}});
 vm.runInContext(source.slice(source.indexOf('function resetMeter'),source.indexOf('function updatePlacementUI')),scope);
 vm.runInContext('startMeter(100);releaseMeter(1400)',scope);assert.equal(scope.power,.5);assert.equal(scope.swingStage,'accuracy');assert.equal(scope.shots.length,0,'release must not strike');
 vm.runInContext('startMeter(2200);releaseMeter(2250)',scope);assert.equal(scope.shots.length,1);assert.equal(scope.shots[0].a,0,'center timing is straight');assert.equal(scope.shots[0].p,.5);assert.equal(scope.swingStage,'idle');
 scope.placing=true;vm.runInContext('startMeter(3000)',scope);assert.equal(scope.swingStage,'idle','cannot swing during placement');scope.placing=false;
 vm.runInContext('startMeter(3000);cancelMeter();releaseMeter(3400)',scope);assert.equal(scope.shots.length,1,'cancelled gesture must not strike');
 vm.runInContext('startMeter(4000);releaseMeter(5300);finishMeter(6900)',scope);assert.equal(scope.shots.length,2,'missed timing window gives a bounded mishit');
+// Pull power is positional: holding still never increases it, and backing off reduces it.
+vm.runInContext("startMeter(7000,{x:500,y:200,desktop:true,power:0,previous:0,pointerId:1})",scope);
+assert.equal(scope.power,0);
+const pull=source.slice(source.indexOf('function updatePull('),source.indexOf("$('pad').addEventListener('pointermove',updatePull)"));vm.runInContext(pull,scope);
+scope.event={pointerId:1,clientX:340,clientY:200};vm.runInContext('updatePull(event)',scope);assert.equal(scope.power,.5);
+scope.event.clientX=372;vm.runInContext('updatePull(event)',scope);assert.equal(scope.power,.4);
+vm.runInContext('releaseMeter(12000)',scope);assert.equal(scope.power,.4,'release preserves drag power regardless of held time');assert.equal(scope.swingStage,'accuracy');vm.runInContext('finishMeter(12800)',scope);assert.equal(scope.shots.at(-1).p,.4);
+vm.runInContext("startMeter(13000,{x:500,y:200,desktop:true,power:0,previous:0,pointerId:1});releaseMeter(17000)",scope);assert.equal(scope.swingStage,'idle','no-pull release cancels');
 const balls=Array.from({length:4},(_,i)=>({x:i*2,z:0,entered:true,side:i%2,progress:0,finished:false}));const match=new VariantMatch('association',balls,2);match.croquetTarget=1;
 for(const point of [{x:3,z:0},{x:1,z:0},{x:2,z:1},{x:2,z:-1}]){match.placeCroquet(contactAngle(balls[1],point));assert(Math.abs(Math.hypot(balls[0].x-balls[1].x,balls[0].z-balls[1].z)-.28001)<1e-9);assert((balls[0].x-balls[1].x)*(point.x-balls[1].x)+(balls[0].z-balls[1].z)*(point.z-balls[1].z)>0)}
 assert(source.includes("line.visible=mallet.visible=!placing"));
