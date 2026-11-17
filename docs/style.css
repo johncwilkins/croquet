@@ -43,3 +43,8 @@ body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-
 
 /* Keep the court visible right up to the top edge. */
 header{background:none}
+
+
+/* Timed swing: large center band and marker work with touch or mouse. */
+#pad,.desktop-shot #pad{cursor:pointer}.desktop-shot #powerfill{left:0;right:auto}#pad .pad-icon{display:none!important}.swing-guide{height:12px;width:100%;margin:9px auto;background:#ffffff26;border-radius:6px}.swing-guide:before{left:43%;width:14%;height:12px;top:0;background:#a7d4a866;border-radius:3px}.swing-guide i{height:18px;width:4px;top:-3px;background:#ffe1a0;border-radius:2px}#pad:focus-visible{outline:3px solid #d6a763}#pad[aria-disabled="true"]{opacity:.45;cursor:default}#placeconfirm,#placeedit{padding:9px 12px;border-radius:5px;background:#173e31;color:#f3f0e5;font-size:12px;margin-top:6px;min-height:36px}#placeconfirm:disabled{opacity:.45}.placing .shotcontrols{display:none}.placing #hint{display:block;max-width:450px;font-size:12px;line-height:1.4}.placing #contactcontrols{max-width:400px}.placing #contactangle{min-height:36px}.placing .shotpanel{border:2px solid #d6a763}.placing .live{background:#173e31}#contactcontrols[hidden],#placeconfirm[hidden],#placeedit[hidden]{display:none!important}
+@media(max-width:680px){.placing .shotpanel h1{display:block}.placing #hint{font-size:11px}.placing #contactcontrols{max-width:100%;margin-top:4px}.placing #ballbadge{display:none}.placing .turn{display:block}#pad b{line-height:1.4}.swing-guide{margin:8px auto}}

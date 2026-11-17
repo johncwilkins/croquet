@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import {heldPower,accuracyPosition,timingError,contactAngle,ACCURACY_MS} from '../dist/timed-swing.js';
+import {VariantMatch} from '../dist/variants.js';
+assert.equal(heldPower(1300),.5);assert.equal(heldPower(6000),1);
+assert.equal(accuracyPosition(800),0);assert.equal(timingError(.14),0);
+assert.equal(timingError(-.14),0);assert(timingError(-.9)<0);assert(timingError(.9)>0);
+assert(Math.abs(timingError(1))<.105);
+const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{textContent:'',open:false,classList:{add(){},remove(){}},style:{setProperty(){}},getAttribute:()=> 'false'});return elements.get(id)};
+const source=readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');
+const scope=vm.createContext({$,heldPower,accuracyPosition,timingError,phase:'aim',human:()=>true,placing:false,swingStage:'idle',meterStart:0,spaceStart:0,drag:null,power:0,angle:0,shots:[],setPower(p){scope.power=p},strike(a,p,j){scope.shots.push({a,p,j})}});
+vm.runInContext(source.slice(source.indexOf('function resetMeter'),source.indexOf('function updatePlacementUI')),scope);
+vm.runInContext('startMeter(100);releaseMeter(1400)',scope);assert.equal(scope.power,.5);assert.equal(scope.swingStage,'accuracy');assert.equal(scope.shots.length,0,'release must not strike');
+vm.runInContext('startMeter(2200);releaseMeter(2250)',scope);assert.equal(scope.shots.length,1);assert.equal(scope.shots[0].a,0,'center timing is straight');assert.equal(scope.shots[0].p,.5);assert.equal(scope.swingStage,'idle');
+scope.placing=true;vm.runInContext('startMeter(3000)',scope);assert.equal(scope.swingStage,'idle','cannot swing during placement');scope.placing=false;
+vm.runInContext('startMeter(3000);cancelMeter();releaseMeter(3400)',scope);assert.equal(scope.shots.length,1,'cancelled gesture must not strike');
+vm.runInContext('startMeter(4000);releaseMeter(5300);finishMeter(6900)',scope);assert.equal(scope.shots.length,2,'missed timing window gives a bounded mishit');
+const balls=Array.from({length:4},(_,i)=>({x:i*2,z:0,entered:true,side:i%2,progress:0,finished:false}));const match=new VariantMatch('association',balls,2);match.croquetTarget=1;
+for(const point of [{x:3,z:0},{x:1,z:0},{x:2,z:1},{x:2,z:-1}]){match.placeCroquet(contactAngle(balls[1],point));assert(Math.abs(Math.hypot(balls[0].x-balls[1].x,balls[0].z-balls[1].z)-.28001)<1e-9);assert((balls[0].x-balls[1].x)*(point.x-balls[1].x)+(balls[0].z-balls[1].z)*(point.z-balls[1].z)>0)}
+assert(source.includes("line.visible=mallet.visible=!placing"));
+console.log('PASS: timed power, center band, early/late error, release then tap, no double strike, cancellation, placement swing guard, and four-sided contact placement');
