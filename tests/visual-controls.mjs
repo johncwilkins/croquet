@@ -13,9 +13,10 @@ assert.equal(grounds.grass.map.image.width,2048);assert.equal(grounds.grass.map.
 assert.equal(grounds.grass.bumpScale,.003);assert.equal(grounds.grass.map.anisotropy,8);
 assert.equal(grounds.grass.map.magFilter,THREE.LinearFilter);
 const pattern=grounds.randomizeLawn();assert.notEqual(grounds.randomizeLawn(),pattern);
-const {createWicket,createSpectators}=await import('../dist/details.js');
+const {createWicket,createSpectators,createFlags,createWornGrass}=await import('../dist/details.js');
 const wicket=createWicket(1,2,0);assert.equal(wicket.children.filter(o=>o.userData.wicketFoot).length,2);
 wicket.traverse(o=>{if(o.geometry?.attributes.position)for(const v of o.geometry.attributes.position.array)assert(Number.isFinite(v))});
+const flags=new THREE.Scene();createFlags(flags);assert.equal(flags.children.filter(o=>o.userData.wornGrass==='flag').length,4);const peg=new THREE.Group();createWornGrass(peg,0,0,.38,'peg');assert.equal(peg.children[0].userData.wornGrass,'peg');assert.equal(peg.children[0].children[0].material.map.image.width,512);
 const crowd=new THREE.Scene(),animate=createSpectators(crowd,true);
 assert.equal(crowd.children.filter(o=>o.userData.spectator).length,12);
 const head=crowd.children[0].children.find(o=>o.type==='Group').children.find(o=>o.type==='Group');
@@ -24,8 +25,8 @@ for(const p of [.1,.5,.9]){const pro=shotUncertainty(p,true,'pro'),oldAngle=(.10
 assert.equal(pro.angleSD,oldAngle);assert.deepEqual(shotUncertainty(p,true),pro);
 assert(shotUncertainty(p,true,'amateur').angleSD>shotUncertainty(p,true,'club').angleSD);
 assert(shotUncertainty(p,true,'club').angleSD>pro.angleSD);
-assert.deepEqual(shotUncertainty(p,false,'amateur'),shotUncertainty(p,false,'pro'));}
-assert.deepEqual(Object.values(COMPUTER_LEVELS).map(o=>o.name),['Amateur','Country Club Champ','Pro']);
+assert(shotUncertainty(p,true,'master').angleSD<pro.angleSD);assert(shotUncertainty(p,true,'master').speedSpread<pro.speedSpread);assert.deepEqual(shotUncertainty(p,false,'master'),shotUncertainty(p,false,'pro'));assert.deepEqual(shotUncertainty(p,false,'amateur'),shotUncertainty(p,false,'pro'));}
+assert.deepEqual(Object.values(COMPUTER_LEVELS).map(o=>o.name),['Amateur','Country Club Champ','Pro','Master']);
 const source=readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');
 const wheel=source.slice(source.indexOf('function zoomPlacement('),source.indexOf("renderer.domElement.addEventListener('wheel'"));
 const slider={value:4.5};let prevented=false;
@@ -35,4 +36,4 @@ vm.runInContext('zoomPlacement(event)',state);assert(prevented&&state.placementZ
 state.event.deltaY=-100;vm.runInContext('zoomPlacement(event)',state);assert(Math.abs(state.placementZoom-4.5)<1e-9);
 state.placementView='overhead';state.event.deltaY=100;vm.runInContext('zoomPlacement(event)',state);assert.equal(state.placementView,'close');assert(state.placementZoom>18);
 state.placing=false;const previous=state.placementZoom;vm.runInContext('zoomPlacement(event)',state);assert.equal(state.placementZoom,previous);
-console.log('PASS: fine turf/filtering, mowing patterns, weathered wicket feet, spectator geometry/animation, three AI levels with unchanged Pro/human shots, and placement wheel zoom');
+console.log('PASS: fine turf/filtering, mowing patterns, weathered wicket feet, spectator geometry/animation, four AI levels with unchanged Pro/human shots, and placement wheel zoom');
