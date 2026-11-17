@@ -1,26 +1,27 @@
 import * as THREE from './vendor/three.module.js';
 export function createGrounds(scene,renderer){
  let seed=81;const rand=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
- function texture(kind,a,b){const canvas=document.createElement('canvas');canvas.width=canvas.height=512;const c=canvas.getContext('2d');c.fillStyle=a;c.fillRect(0,0,512,512);
+ function texture(kind,a,b){const canvas=document.createElement('canvas');canvas.width=canvas.height=kind==='turf'?2048:512;const c=canvas.getContext('2d');c.fillStyle=a;c.fillRect(0,0,canvas.width,canvas.height);if(kind==='turf')c.scale(4,4);
  if(kind==='turf'){for(let i=0;i<80000;i++){const x=rand()*512,y=rand()*512;c.strokeStyle=rand()>.5?'#bdcd921b':'#26462a18';c.lineWidth=.5+rand();c.beginPath();c.moveTo(x,y);c.lineTo(x+(rand()-.5)*2,y-1-rand()*3);c.stroke()}for(let i=0;i<40;i++){c.fillStyle='#c9c48106';c.beginPath();c.ellipse(rand()*512,rand()*512,10+rand()*40,10+rand()*40,0,0,7);c.fill()}}
  else{const rows=kind==='shingle'?32:16;for(let row=0;row<rows;row++){const h=512/rows;for(let col=-1;col<12;col++){const w=kind==='shingle'?46:70,x=col*w+(row%2)*w/2,y=row*h;c.fillStyle=rand()>.45?a:b;c.fillRect(x+1,y+1,w-2,h-2);c.fillStyle='#00000012';c.fillRect(x+2,y+h-3,w-3,2)}}}
- const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=renderer.capabilities?.getMaxAnisotropy?.()||1;return t}
- const turf=texture('turf','#688254','#547247');turf.repeat.set(12,15);const grass=new THREE.MeshStandardMaterial({color:'#91a476',map:turf,bumpMap:turf,bumpScale:.025,roughness:1});
+ const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=renderer.capabilities?.getMaxAnisotropy?.()||1;t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;return t}
+ const turf=texture('turf','#688254','#547247');turf.repeat.set(28,35);const grass=new THREE.MeshStandardMaterial({color:'#91a476',map:turf,bumpMap:turf,bumpScale:.003,roughness:1});
  const ground=new THREE.Mesh(new THREE.BoxGeometry(28,.15,35),grass);ground.position.y=-.09;ground.receiveShadow=true;scene.add(ground);
  // Whole-court mowing directions over the existing fine grass texture.
- const cutCanvas=document.createElement('canvas');cutCanvas.width=cutCanvas.height=512;
- const cutTexture=new THREE.CanvasTexture(cutCanvas);cutTexture.colorSpace=THREE.SRGBColorSpace;
+ const cutCanvas=document.createElement('canvas');cutCanvas.width=cutCanvas.height=2048;
+ const cutTexture=new THREE.CanvasTexture(cutCanvas);cutTexture.colorSpace=THREE.SRGBColorSpace;cutTexture.magFilter=THREE.LinearFilter;cutTexture.minFilter=THREE.LinearMipmapLinearFilter;cutTexture.anisotropy=renderer.capabilities?.getMaxAnisotropy?.()||1;
  const cut=new THREE.Mesh(new THREE.PlaneGeometry(28,35),new THREE.MeshStandardMaterial({map:cutTexture,color:'#608048',transparent:true,opacity:.24,depthWrite:false,roughness:1}));cut.rotation.x=-Math.PI/2;cut.position.y=-.011;cut.receiveShadow=true;scene.add(cut);
  const patterns=['Tournament stripes','Crosscut checks','Diamond cut','Concentric rings','Chevron cut'];let lastPattern=-1;
  function randomizeLawn(){const count=patterns.length;lastPattern=lastPattern<0?Math.floor(Math.random()*count):(lastPattern+1+Math.floor(Math.random()*(count-1)))%count;
- const c=cutCanvas.getContext('2d'),image=c.createImageData(512,512),data=image.data;
- for(let y=0;y<512;y++)for(let x=0;x<512;x++){const u=x/512*28,v=y/512*35;let band;
- if(lastPattern===0)band=Math.floor(u/3.5);
- else if(lastPattern===1)band=Math.floor(u/3.5)+Math.floor(v/3.5);
- else if(lastPattern===2)band=Math.floor((u+v)/4)+Math.floor((u-v)/4);
- else if(lastPattern===3)band=Math.floor(Math.hypot(u-14,(v-17.5)*.8)/2);
- else band=Math.floor((v+Math.abs(u-14)*.8)/3);
- const light=((band%2)+2)%2===0,i=(y*512+x)*4;data[i]=light?193:29;data[i+1]=light?210:65;data[i+2]=light?132:33;data[i+3]=255;}
+ const c=cutCanvas.getContext('2d'),size=cutCanvas.width,image=c.createImageData(size,size),data=image.data;
+ const edge=t=>Math.max(-1,Math.min(1,Math.sin(Math.PI*t)*45));
+ for(let y=0;y<size;y++)for(let x=0;x<size;x++){const u=x/size*28,v=y/size*35;let shade;
+ if(lastPattern===0)shade=edge(u/3.5);
+ else if(lastPattern===1)shade=edge(u/3.5)*edge(v/3.5);
+ else if(lastPattern===2)shade=edge((u+v)/4)*edge((u-v)/4);
+ else if(lastPattern===3)shade=edge(Math.hypot(u-14,(v-17.5)*.8)/2);
+ else shade=edge((v+Math.abs(u-14)*.8)/3);
+ const light=(shade+1)/2,i=(y*size+x)*4;data[i]=29+164*light;data[i+1]=65+145*light;data[i+2]=33+99*light;data[i+3]=255;}
  c.putImageData(image,0,0);cutTexture.needsUpdate=true;renderer.lastKey='';return patterns[lastPattern]}
  const settings={english:{title:'English Cottage',sky:'#bfd1d4',fog:'#bfd1d4'},nantucket:{title:'Nantucket Village',sky:'#c5deeb',fog:'#c5deeb'},resort:{title:'Country Club Resort',sky:'#c6dce5',fog:'#c6dce5'}};
  const groups={},buildings=[];
@@ -50,3 +51,4 @@ export function createGrounds(scene,renderer){
  }
  return {settings,randomizeLawn,setShotView(active){for(const building of buildings)building.visible=!active;renderer.lastKey='';},set(name){if(!settings[name])return;Object.entries(groups).forEach(([key,g])=>g.visible=key===name);scene.background=new THREE.Color(settings[name].sky);scene.fog.color.set(settings[name].fog);renderer.lastKey='';},grass};
 }
+
