@@ -140,7 +140,15 @@ function beginTurn(){if(phase==='over')return;placementView='close';placementYaw
   resetHoopProgress(b);
   notice(b.name+' plays from the penalty area.');
 }if(match?.chooseBall&&!human()){const choices=balls.map((b,i)=>({b,i})).filter(o=>o.b.side!==humanSide&&!o.b.finished);choices.sort((a,b)=>Math.hypot(a.b.x-match.target(a.i).x,a.b.z-match.target(a.i).z)-Math.hypot(b.b.x-match.target(b.i).x,b.b.z-match.target(b.i).z));if(choices[0]){match.selectBall(choices[0].i);turn=match.turn;b=current()}}if(!b.entered){const pos=match?match.startPosition():{x:13.35,z:16.85};b.x=pos.x;b.z=pos.z;b.entered=true}if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const o=balls[match.croquetTarget],t=match.target();const a=Math.atan2(o.x-t.x,o.z-t.z);$('contactangle').value=a*180/Math.PI;match.placeCroquet(a);if(!croquetPositionValid()){for(let k=0;k<72;k++){const alternative=a+k*Math.PI/36;match.placeCroquet(alternative);if(croquetPositionValid()){$('contactangle').value=((alternative*180/Math.PI+540)%360)-180;break}}}}placing=human()&&match?.croquetTarget!==null&&match?.croquetTarget!==undefined;guideAim();updateUI();if(!human())aiTimer=setTimeout(aiShot,1200)}
-function reset(){lastTiming=null;committedTiming=null;resetMeter();endMouseOrbit();clearTimeout(aiTimer);offsideRule=new OffsideRule();offsideQueue=[];$('offsidedialog').close();humanSide=0;humanBall=0;grounds.randomizeLawn();setCourse(variant);if(variant!=='golf')mode='ai';$('mode').value=mode;$('mode').hidden=variant!=='golf';$('players').hidden=variant==='golf';balls.forEach((b,i)=>b.side=i%2);turn=0;point=0;scores=[0,0];balls.forEach(b=>{b.x=13.35;b.z=16.85;b.vx=b.vz=b.vy=0;b.y=R;b.entered=false;b.finished=false;b.progress=0;delete b.aimAngle;delete b.offsidePenalty;resetHoopProgress(b)});match=variant==='golf'?null:new VariantMatch(variant,balls,Number($('players').value));document.body.classList.toggle('multiplayer',!!match?.individual);$('opponentlabel').textContent=match?.individual?'COMPUTERS':mode==='local'?'PLAYER 2':'COMPUTER';$('goaltext').textContent=variant==='golf'?'FIRST TO 7':match?.individual?'FIRST TO '+match.config.route.length:'BOTH BALLS HOME';$('footerlabel').textContent=VARIANTS[variant].short+' · 3D CLUB EDITION';$('ruleSummary').textContent=VARIANTS[variant].summary;$('ruleDetails').textContent=VARIANTS[variant].details;$('ruleLimit').textContent='Larger balls and wider hoops for touch play. '+VARIANTS[variant].limit;$('ruleLink').href=VARIANTS[variant].url;$('ruleLink').textContent=VARIANTS[variant].name+' · Official rules ↗';$('ballprogress').hidden=variant==='golf';$('contactcontrols').hidden=true;$('ballchoices').hidden=true;phase='aim';drag=null;spaceStart=0;$('history').textContent='Choosing colours and opening order…';prepareOpening()}
+function reset(startMatch=true){lastTiming=null;committedTiming=null;resetMeter();endMouseOrbit();clearTimeout(aiTimer);offsideRule=new OffsideRule();offsideQueue=[];$('offsidedialog').close();humanSide=0;humanBall=0;grounds.randomizeLawn();setCourse(variant);if(variant!=='golf')mode='ai';$('mode').value=mode;$('mode').hidden=variant!=='golf';$('players').hidden=variant==='golf';balls.forEach((b,i)=>b.side=i%2);turn=0;point=0;scores=[0,0];balls.forEach(b=>{b.x=13.35;b.z=16.85;b.vx=b.vz=b.vy=0;b.y=R;b.entered=false;b.finished=false;b.progress=0;delete b.aimAngle;delete b.offsidePenalty;resetHoopProgress(b)});match=variant==='golf'?null:new VariantMatch(variant,balls,Number($('players').value));document.body.classList.toggle('multiplayer',!!match?.individual);$('opponentlabel').textContent=match?.individual?'COMPUTERS':mode==='local'?'PLAYER 2':'COMPUTER';$('goaltext').textContent=variant==='golf'?'FIRST TO 7':match?.individual?'FIRST TO '+match.config.route.length:'BOTH BALLS HOME';$('footerlabel').textContent=VARIANTS[variant].short+' · 3D CLUB EDITION';$('ruleSummary').textContent=VARIANTS[variant].summary;$('ruleDetails').textContent=VARIANTS[variant].details;$('ruleLimit').textContent='Larger balls and wider hoops for touch play. '+VARIANTS[variant].limit;$('ruleLink').href=VARIANTS[variant].url;$('ruleLink').textContent=VARIANTS[variant].name+' · Official rules ↗';$('ballprogress').hidden=variant==='golf';$('contactcontrols').hidden=true;$('ballchoices').hidden=true;phase='aim';drag=null;spaceStart=0;if(startMatch){
+  $('history').textContent='Choosing colours and opening order…';
+  prepareOpening();
+}else{
+  phase='setup';
+  $('history').textContent='Choose your game settings to begin.';
+  guideAim();
+  updateUI();
+}}
 function updateOwnership(){
  const owned=match?.individual?[humanBall]:[humanSide,humanSide+2];
  const first=document.querySelector('.scoreboard>div:first-child small');first.replaceChildren(document.createTextNode(mode==='local'?'PLAYER 1 ':'YOU '));
@@ -326,10 +334,37 @@ let controllerConnected=false;
 const controllerMenus=createMenuNavigator();
 const controllerFields=[['gpvariant','variant'],['gpplayers','players'],['gpmode','mode'],['gpdifficulty','difficulty'],['gpsetting','setting']];
 function controllerFieldState(){$('gpplayers').disabled=$('gpvariant').value==='golf';$('gpmode').disabled=$('gpvariant').value!=='golf'}
-function openControllerMenu(){if($('offsidedialog').open)return;if($('tossdialog').open){notice('Choose your opening colours first.');return}cancelMeter();if($('controllerdialog').open){$('controllerdialog').close();controllerMenus.clear();return}if($('helpdialog').open)$('helpdialog').close();for(const [dest,source]of controllerFields){$(dest).replaceChildren(...Array.from($(source).options).map(o=>o.cloneNode(true)));$(dest).value=$(source).value}controllerFieldState();$('gpaccuracy').value=playerAccuracy;$('gpshotheight').value=shotHeight;$('controllerdialog').showModal();controllerMenus.clear();}
+function openControllerMenu(){
+  if($('offsidedialog').open)return;
+  if($('tossdialog').open){notice('Choose your opening colours first.');return}
+  const starting=phase==='setup';
+  const dialog=$('controllerdialog');
+  if(dialog.open){if(!starting)closeControllerMenu();return}
+  cancelMeter();
+  if($('helpdialog').open)$('helpdialog').close();
+  for(const [dest,source] of controllerFields){
+    $(dest).replaceChildren(...Array.from($(source).options).map(option=>option.cloneNode(true)));
+    $(dest).value=$(source).value;
+  }
+  controllerFieldState();
+  $('gpaccuracy').value=playerAccuracy;
+  $('gpshotheight').value=shotHeight;
+  $('controllerheading').textContent=starting?'Set up your game':'Controller & game settings';
+  $('gpsetupintro').hidden=!starting;
+  $('gpapply').textContent=starting?'Start game':'Apply settings & return';
+  for(const id of ['controllerclose','gpnew','gphelp','gpreturn','gprestartnote'])$(id).hidden=starting;
+  dialog.showModal();
+  if(starting)$('gpvariant').focus();
+  controllerMenus.clear();
+}
 function closeControllerMenu(){$('controllerdialog').close();controllerMenus.clear();}
-$('controlleropen').onclick=openControllerMenu;$('controllerclose').onclick=$('gpreturn').onclick=closeControllerMenu;$('gpvariant').onchange=controllerFieldState;
-function applyControllerSettings(forceNew=false){const nextVariant=$('gpvariant').value,nextPlayers=$('gpplayers').value,nextMode=nextVariant==='golf'?$('gpmode').value:'ai',restart=forceNew||variant!==nextVariant||mode!==nextMode||(nextVariant!=='golf'&&$('players').value!==nextPlayers);closeControllerMenu();playerAccuracy=$('gpaccuracy').value;
+$('controllerdialog').addEventListener('cancel',event=>{
+  if(phase==='setup')event.preventDefault();
+});
+$('controlleropen').onclick=openControllerMenu;
+$('controllerclose').onclick=$('gpreturn').onclick=closeControllerMenu;
+$('gpvariant').onchange=controllerFieldState;
+function applyControllerSettings(forceNew=false){const nextVariant=$('gpvariant').value,nextPlayers=$('gpplayers').value,nextMode=nextVariant==='golf'?$('gpmode').value:'ai',restart=phase==='setup'||forceNew||variant!==nextVariant||mode!==nextMode||(nextVariant!=='golf'&&$('players').value!==nextPlayers);closeControllerMenu();playerAccuracy=$('gpaccuracy').value;
 const nextHeight=$('gpshotheight').value;
 const heightChanged=nextHeight!==shotHeight;
 shotHeight=nextHeight;
@@ -348,8 +383,8 @@ const controller=createGamepadDriver({
  actions:{
  connected(active){controllerConnected=active;document.body.classList.toggle('gamepad-active',active);$('controllerhint').hidden=!active;$('controllerstatus').textContent=active?'Controller connected. Release buttons and centre the sticks to begin.':'Controller disconnected. Press and release a controller button to reconnect.';if(active)notice('Xbox controller connected');},
  cancel:()=>cancelMeter(),settings:openControllerMenu,
- help(){if($('offsidedialog').open||$('tossdialog').open)return;cancelMeter();closeControllerMenu();if($('helpdialog').open)$('helpdialog').close();else $('help').click();controllerMenus.clear();},
- back(){if($('offsidedialog').open)return;if($('tossdialog').open){notice('Choose your opening colours to begin.');return}if($('helpdialog').open)$('helpdialog').close();else closeControllerMenu();controllerMenus.clear();},
+ help(){if(phase==='setup'||$('offsidedialog').open||$('tossdialog').open)return;cancelMeter();closeControllerMenu();if($('helpdialog').open)$('helpdialog').close();else $('help').click();controllerMenus.clear();},
+ back(){if(phase==='setup'||$('offsidedialog').open)return;if($('tossdialog').open){notice('Choose your opening colours to begin.');return}if($('helpdialog').open)$('helpdialog').close();else closeControllerMenu();controllerMenus.clear();},
  menuMove:n=>controllerMenus.move(n),menuAdjust:n=>controllerMenus.adjust(n),menuAccept:()=>controllerMenus.accept(),menuScroll:n=>controllerMenus.scroll(n),
  begin(now){startMeter(now,{gamepad:true});$('swingfeedback').textContent='Release A / RT, then press again at centre';},
  power(dt){setPower(power+dt/2.6)},release:now=>releaseMeter(now),center:now=>finishMeter(now),
@@ -442,7 +477,9 @@ if(mouseOrbit||(!placing&&view==='shotview')){
   camGoal.set(b.x-sx*distance,height,b.z-sz*distance);
   lookGoal.set(b.x+sx*4,0,b.z+sz*4);
 }else if(placing&&placementView==='close'){const o=balls[match.croquetTarget];camGoal.set(o.x+Math.sin(placementYaw)*placementZoom*.55,placementZoom,o.z+Math.cos(placementYaw)*placementZoom*.55);lookGoal.set(o.x,0,o.z)}else if((placing?placementView:view)==='overhead'){camGoal.set(0,innerWidth<680?65:54,5);lookGoal.set(0,0,3)}else{const mobile=innerWidth<680;camGoal.set(mobile?31:36,mobile?58:49,mobile?63:52);lookGoal.set(mobile?0:-1,0,mobile?4:3)}if(mouseOrbit||!camInit){camera.position.copy(camGoal);look.copy(lookGoal);camInit=true}else{camera.position.lerp(camGoal,1-Math.exp(-dt*3));look.lerp(lookGoal,1-Math.exp(-dt*3))}if(camera.position.distanceTo(camGoal)<.001)camera.position.copy(camGoal);if(look.distanceTo(lookGoal)<.001)look.copy(lookGoal);camera.lookAt(look);updateYardRuler(b,dx,dz,rulerLength);hoopMeshes.forEach(g=>{const v=new THREE.Vector3(g.position.x,1.3,g.position.z).project(camera);const el=g.userData.label;el.style.left=(v.x*.5+.5)*renderWidth+'px';el.style.top=(-v.y*.5+.5)*renderHeight+'px';el.style.visibility=v.z>1?'hidden':'visible'});ring.material.opacity=.65+Math.sin(now*.002)*.2;drawMap();renderer.render(scene,camera)}
-initFullscreen($('fullscreen'),notice,resize);reset();
+initFullscreen($('fullscreen'),notice,resize);
+reset(false);
+openControllerMenu();
 for(const id of ['wide','shotview','overhead'])$(id).classList.toggle('active',id===view);
 requestAnimationFrame(frame);
 // Small read-only state surface for verifying the simulation in a browser.

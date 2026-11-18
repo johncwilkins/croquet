@@ -67,3 +67,5 @@ header{background:none}
 @media(max-width:680px){#controllerhint{font-size:10px;line-height:1.4;padding:4px 6px}.controller-settings{grid-template-columns:100px 1fr;gap:8px}#controllerdialog{padding:24px}.controller-guide{font-size:12px}.views #controlleropen{padding:8px}}
 
 #pad.timing-result .swing-guide i{width:8px;height:8px;top:-2.5px;box-shadow:0 0 0 1px #fff6d8}
+
+#controllerdialog [hidden]{display:none!important}
