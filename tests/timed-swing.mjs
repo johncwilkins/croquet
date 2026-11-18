@@ -8,9 +8,9 @@ assert.equal(heldPower(1300),.5);assert.equal(heldPower(6000),1);
 assert.equal(accuracyPosition(600),0);assert.equal(timingError(.055),0);
 assert.equal(timingError(-.055),0);assert(timingError(-.9)<0);assert(timingError(.9)>0);
 assert(Math.abs(timingError(1))<.105);
-const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{textContent:'',open:false,classList:{add(){},remove(){}},style:{setProperty(){}},getAttribute:()=> 'false'});return elements.get(id)};
+const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{textContent:'',open:false,classList:{add(){},remove(){}},style:{setProperty(key,value){this[key]=value}},getAttribute:()=> 'false'});return elements.get(id)};
 const source=readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');
-const scope=vm.createContext({$,desktopShot:true,pullPower,heldPower,accuracyPosition,timingError,phase:'aim',human:()=>true,placing:false,swingStage:'idle',meterStart:0,spaceStart:0,drag:null,power:0,angle:0,shots:[],setPower(p){scope.power=p},strike(a,p,j){scope.shots.push({a,p,j})}});
+const scope=vm.createContext({$,desktopShot:true,pullPower,heldPower,accuracyPosition,timingError,phase:'aim',human:()=>true,placing:false,swingStage:'idle',meterStart:0,spaceStart:0,lastTiming:null,drag:null,power:0,angle:0,shots:[],setPower(p){scope.power=p},strike(a,p,j){scope.shots.push({a,p,j})}});
 vm.runInContext(source.slice(source.indexOf('function resetMeter'),source.indexOf('function updatePlacementUI')),scope);
 vm.runInContext('startMeter(100);releaseMeter(1400)',scope);assert.equal(scope.power,.5);assert.equal(scope.swingStage,'accuracy');assert.equal(scope.shots.length,0,'release must not strike');
 vm.runInContext('startMeter(2000);releaseMeter(2050)',scope);assert.equal(scope.shots.length,1);assert.equal(scope.shots[0].a,0,'center timing is straight');assert.equal(scope.shots[0].p,.5);assert.equal(scope.swingStage,'idle');
@@ -98,3 +98,11 @@ listeners.pointermove({buttons:4,pointerId:1,clientX:100,clientY:-50});
 assert.notDeepEqual(goals(),lowView);
 listeners.pointerup({pointerId:1});
 assert.deepEqual(goals(),lowView);
+
+for(const [tap,label,position] of [[450,'Early','12.5%'],[750,'Late','-12.5%']]){
+  vm.runInContext(`startMeter(0);releaseMeter(1300);finishMeter(${1300+tap});cancelMeter()`,scope);
+  assert.equal($('swingfeedback').textContent,label);
+  assert.equal($('pad').style['--drift'],position);
+}
+vm.runInContext('startMeter(0)',scope);
+assert.equal($('pad').style['--drift'],'0%');
