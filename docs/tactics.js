@@ -2,7 +2,16 @@ import {beginHoopStroke,trackHoopSegment,hoopWinner} from './scoring.js';
 // Choose between a reliable hoop attempt, a clearance, a block, and an approach.
 const R=.14,F=2.2,MAX=15;
 export const COMPUTER_LEVELS={amateur:{name:'Amateur',angle:3.4,speed:3.0},club:{name:'Country Club Champ',angle:1.85,speed:1.8},pro:{name:'Pro',angle:1,speed:1},master:{name:'Master',angle:.78,speed:.82}};
-export function shotUncertainty(power,computer=false,level='pro'){const skill=COMPUTER_LEVELS[level]||COMPUTER_LEVELS.pro;return {angleSD:(.10+1.45*power*power)*Math.PI/180*(computer?1.25*skill.angle:1),speedSpread:(.004+.014*power*power)*(computer?1.2*skill.speed:1)}}
+export function shotUncertainty(power, computer=false, level='pro', playerAccuracy='amateur') {
+  const skill = COMPUTER_LEVELS[level] || COMPUTER_LEVELS.pro;
+  const baseAngle = .10 + 1.45 * power * power;
+  const angleDegrees = computer ? baseAngle : playerAccuracy === 'pro'
+    ? baseAngle + .035 + .45 * power * power : baseAngle;
+  return {
+    angleSD: angleDegrees * Math.PI / 180 * (computer ? 1.25 * skill.angle : 1),
+    speedSpread: (.004 + .014 * power * power) * (computer ? 1.2 * skill.speed : 1)
+  };
+}
 function dot(a,b){return a.x*b.x+a.z*b.z}
 function distance(a,b){return Math.hypot(a.x-b.x,a.z-b.z)}
 function segmentDistance(p,a,b){const dx=b.x-a.x,dz=b.z-a.z,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.z-a.z)*dz)/(dx*dx+dz*dz||1)));return Math.hypot(p.x-a.x-t*dx,p.z-a.z-t*dz)}
