@@ -8,7 +8,7 @@ import {initFullscreen} from './fullscreen.js';
 import * as THREE from './vendor/three.module.js';
 import {VARIANTS,VariantMatch} from './variants.js';
 import {pullPower,wicketHeading,distanceToBoundary,shotAimTarget} from './shot-control.js';
-import {launchVelocity,airborne,advanceFlight,collideUpright,collideArch,collideBalls} from './flight.js';
+import {launchVelocity,GRAVITY,airborne,advanceFlight,collideUpright,collideArch,collideBalls} from './flight.js';
 import {CanvasRenderer} from './fallback.js';
 import {beginHoopStroke,trackHoopSegment,hoopWinner,resetHoopProgress} from './scoring.js';
 import {chooseShot,chooseBreakShot,chooseCroquetShot,shotUncertainty,COMPUTER_LEVELS} from './tactics.js';
@@ -49,13 +49,12 @@ try {
   const saved=localStorage.getItem('croquet-player-accuracy');
   if(saved==='amateur'||saved==='pro')playerAccuracy=saved;
 } catch {}
-// Eye heights in court yards, measured below the top of the player's head.
-const shotEyeHeights={'five-six':1.5,'six':1.67};
 let shotHeight='classic';
 try {
   const saved=localStorage.getItem('croquet-shot-height');
-  if(Object.hasOwn(shotEyeHeights,saved))shotHeight=saved;
+  if(['low','six','five-six'].includes(saved))shotHeight='low';
 } catch {}
+let shotPullback=0;
 let placementView='close',placementYaw=0,placementZoom=4.5,accuracyClickUntil=0;
 let placing=false,swingStage='idle',meterStart=0,placementPointer=null;
 let turn=0,point=0,scores=[0,0],mode='ai',phase='aim',angle=0,baseAngle=0,power=0,drag=null,spaceStart=0,view='wide',showRoute=false,shotAge=0,lastTime=performance.now(),aiTimer=null,audio=null,sound=false,camInit=false,scoredThisStroke=false,shotCameraAngle=0,swingStarted=0,shotDistance=9;
@@ -112,7 +111,7 @@ function prepareOpening(){phase='toss';placing=false;cancelMeter();updateUI();
  $('tossdialog').showModal();}
 for(const [id,choice]of [['tossfirst','first'],['tosssecond','second'],['tossblue','blue'],['tossred','red']])$(id).onclick=()=>{const result=openingChoice(variant,tossWon,choice),team=result.humanSide?'Red & Yellow':'Blue & Black';startOpening(result,'Coin toss: you play '+team+'.');};
 $('tossdialog').addEventListener('cancel',e=>e.preventDefault());
-function strike(a,p,jump=false){if(phase!=='aim'||placing||p<.025)return;if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined&&!croquetPositionValid()){notice('Rotate the contact position clear of obstacles.');return}endMouseOrbit();if(match)match.beginStroke();else offsideRule.begin(current());angle=a;setPower(p);phase='swing';swingStarted=performance.now();const b=current();shotAge=0;scoredThisStroke=false;balls.forEach(b=>{if(!match)beginHoopStroke(b,scoringHoop());b.grain=Math.random()*Math.PI*2;b.rollBias=(Math.random()-.5)*.026;const [tx,tz]=coords(target());b.startDist=Math.hypot(b.x-tx,b.z-tz)});updateUI();setTimeout(()=>{if(phase!=='swing')return;const uncertainty=shotUncertainty(p,!human(),difficulty,playerAccuracy),normal=Math.sqrt(-2*Math.log(Math.max(.0001,Math.random())))*Math.cos(2*Math.PI*Math.random()),actualAngle=a+normal*uncertainty.angleSD,speed=MAX*p*(1+(Math.random()*2-1)*uncertainty.speedSpread);const launch=launchVelocity(speed,jump);b.vx=Math.sin(actualAngle)*launch.horizontal;b.vz=Math.cos(actualAngle)*launch.horizontal;b.y=R;b.vy=launch.vertical;phase='moving';beep(150,.1);updateUI()},200)}
+function strike(a,p,jump=false){if(phase!=='aim'||placing||p<.025)return;if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined&&!croquetPositionValid()){notice('Rotate the contact position clear of obstacles.');return}endMouseOrbit();if(match)match.beginStroke();else offsideRule.begin(current());angle=a;setPower(p);phase='swing';swingStarted=performance.now();const b=current();shotAge=0;shotPullback=0;scoredThisStroke=false;balls.forEach(b=>{if(!match)beginHoopStroke(b,scoringHoop());b.grain=Math.random()*Math.PI*2;b.rollBias=(Math.random()-.5)*.026;const [tx,tz]=coords(target());b.startDist=Math.hypot(b.x-tx,b.z-tz)});updateUI();setTimeout(()=>{if(phase!=='swing')return;const uncertainty=shotUncertainty(p,!human(),difficulty,playerAccuracy),normal=Math.sqrt(-2*Math.log(Math.max(.0001,Math.random())))*Math.cos(2*Math.PI*Math.random()),actualAngle=a+normal*uncertainty.angleSD,speed=MAX*p*(1+(Math.random()*2-1)*uncertainty.speedSpread);const launch=launchVelocity(speed,jump);b.vx=Math.sin(actualAngle)*launch.horizontal;b.vz=Math.cos(actualAngle)*launch.horizontal;b.y=R;b.vy=launch.vertical;phase='moving';beep(150,.1);updateUI()},200)}
 function aiShot(){if($('controllerdialog').open||$('helpdialog').open){aiTimer=setTimeout(aiShot,250);return}if(phase!=='aim'||human())return;const t=target(),[x,z]=coords(t),state={balls:balls.map(b=>({x:b.x,z:b.z,entered:onCourt(b),finished:b.finished,side:b.side,hoopRun:b.hoopRun?{...b.hoopRun}:undefined})),striker:turn,hoop:{key:point,x,z},direction:t.d,posts,dead:match?[...match.dead]:[]};
  if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const choice=chooseCroquetShot({...state,contactTarget:match.croquetTarget});if(choice){match.placeCroquet(choice.contactAngle);$('contactangle').value=choice.contactAngle*180/Math.PI;guideAim();$('history').textContent='Computer takes croquet and sets up its next shot.';strike(choice.angle,choice.power);return}const o=balls[match.croquetTarget];strike(Math.atan2(o.x-current().x,o.z-current().z),.15);return}
  if(t.stake){const d=Math.hypot(x-current().x,z-current().z);strike(Math.atan2(x-current().x,z-current().z),Math.min(.95,Math.sqrt(2*F*(d+.7))/MAX));return}
@@ -327,12 +326,33 @@ if(!match&&phase!=='over'){
 if(showRoute){ctx.beginPath();seq.forEach((s,i)=>{const [x,z]=s.stake?(()=>{const p=VARIANTS[variant].stakes.find(p=>p.id===s.stake);return [p.x,p.z]})():hoopPos[s.h];i?ctx.lineTo(mx(x),mz(z)):ctx.moveTo(mx(x),mz(z))});ctx.strokeStyle='#899b70';ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([])}hoopPos.forEach(([x,z],i)=>{ctx.strokeStyle=i===t.h?'#bf822e':'#6a806b';ctx.lineWidth=i===t.h?3:2;ctx.beginPath();ctx.moveTo(mx(x)-6,mz(z));ctx.lineTo(mx(x)+6,mz(z));ctx.stroke();ctx.fillStyle='#4e6757';ctx.font='10px Arial';ctx.fillText(i+1,mx(x)+8,mz(z)+3)});const [hx,hz]=coords(t);ctx.strokeStyle='#bd812e';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(mx(hx),mz(hz)-t.d*15);ctx.lineTo(mx(hx),mz(hz)+t.d*15);ctx.lineTo(mx(hx)-4,mz(hz)+t.d*10);ctx.moveTo(mx(hx),mz(hz)+t.d*15);ctx.lineTo(mx(hx)+4,mz(hz)+t.d*10);ctx.stroke();balls.forEach((b,i)=>{if(!onCourt(b))return;ctx.beginPath();ctx.arc(mx(b.x),mz(b.z),i===turn?4.5:3.5,0,Math.PI*2);ctx.fillStyle=colors[i];ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=1.5;ctx.stroke()});ctx.fillStyle='#61765d';ctx.beginPath();ctx.arc(112,130,2,0,7);ctx.fill()}
 function resize(){const mobile=innerWidth<=680,dock=$('shotpanel')||document.querySelector('.shotpanel');const bottom=mobile||placing?innerHeight-dock.getBoundingClientRect().top+10:0;$('world').style.bottom=bottom+'px';document.querySelector('.live').style.bottom=mobile||placing?(bottom+5)+'px':'';const bounds=$('world').getBoundingClientRect();renderWidth=bounds.width;renderHeight=bounds.height;renderer.setSize(renderWidth,renderHeight);camera.aspect=renderWidth/renderHeight;camera.setViewOffset(renderWidth,renderHeight,0,innerWidth<=680||placing?0:renderHeight*.13,renderWidth,renderHeight);camera.updateProjectionMatrix()}window.addEventListener('resize',resize);new ResizeObserver(resize).observe(document.querySelector('.shotpanel'));resize();
 const camGoal=new THREE.Vector3(),lookGoal=new THREE.Vector3(),look=new THREE.Vector3(0,0,2);let accumulator=0;
-function frame(now){requestAnimationFrame(frame);animateFlags(now/1000);animateSpectators(now/1000);const dt=Math.min((now-lastTime)/1000,.05);lastTime=now;controller.update(now);controllerHint();const b=current(),t=target();if(swingStage==='power'&&!drag)setPower(heldPower(now-meterStart));if(swingStage==='accuracy'){$('pad').style.setProperty('--drift',accuracyPosition(now-meterStart)*50+'%');if(now-meterStart>=ACCURACY_MS)finishMeter(now)}if(phase==='moving'){shotAge+=dt;accumulator+=dt;let n=0;while(accumulator>=1/240&&n++<16){physics(1/240);accumulator-=1/240}if(shotAge>.25&&balls.every(b=>Math.hypot(b.vx,b.vz)<.015&&!airborne(b))){balls.forEach(b=>{b.vx=b.vz=0});finishShot()}}
+function frame(now){requestAnimationFrame(frame);animateFlags(now/1000);animateSpectators(now/1000);const dt=Math.min((now-lastTime)/1000,.05);lastTime=now;controller.update(now);controllerHint();const b=current(),t=target();if(swingStage==='power'&&!drag)setPower(heldPower(now-meterStart));if(swingStage==='accuracy'){$('pad').style.setProperty('--drift',accuracyPosition(now-meterStart)*50+'%');if(now-meterStart>=ACCURACY_MS)finishMeter(now)}if(phase==='moving'){shotAge+=dt;
+  if(shotHeight==='low'){
+    // Estimate the time left from the moving balls, including any after a collision.
+    let remaining=0;
+    for(const ball of balls){
+      if(!onCourt(ball))continue;
+      const speed=Math.hypot(ball.vx,ball.vz);
+      const airTime=airborne(ball)
+        ? (ball.vy+Math.sqrt(ball.vy**2+2*GRAVITY*Math.max(0,ball.y-R)))/GRAVITY
+        : 0;
+      const boundary=distanceToBoundary(ball,Math.atan2(ball.vx,ball.vz));
+      const boundarySpeed=Math.sqrt(Math.max(0,speed*speed-2*F*boundary));
+      const rollTime=(speed-boundarySpeed)/F;
+      remaining=Math.max(remaining,airTime+rollTime);
+    }
+    const progress=Math.min(1,shotAge/Math.max(.25,shotAge+remaining));
+    shotPullback=Math.max(shotPullback,progress*progress*(3-2*progress));
+  }
+accumulator+=dt;let n=0;while(accumulator>=1/240&&n++<16){physics(1/240);accumulator-=1/240}if(shotAge>.25&&balls.every(b=>Math.hypot(b.vx,b.vz)<.015&&!airborne(b))){balls.forEach(b=>{b.vx=b.vz=0});finishShot()}}
 balls.forEach(b=>{b.mesh.visible=onCourt(b);b.mesh.position.set(b.x,b.y??R,b.z);if(b.vx||b.vz){b.mesh.rotation.x+=b.vz*dt/R;b.mesh.rotation.z-=b.vx*dt/R}});activeRing.position.set(b.x,.03,b.z);activeRing.visible=phase==='aim';const dx=Math.sin(angle),dz=Math.cos(angle),rulerLength=distanceToBoundary(b,angle);line.visible=mallet.visible=!placing&&(phase==='aim'||phase==='swing');if(line.visible){const a=line.geometry.attributes.position;a.setXYZ(0,b.x,.07,b.z);a.setXYZ(1,b.x+dx*rulerLength,.07,b.z+dz*rulerLength);a.needsUpdate=true;line.geometry.computeBoundingSphere();line.computeLineDistances();const swing=phase==='swing'?Math.min(1,(now-swingStarted)/200):0;const forward=swingStage==='accuracy'?Math.min(1,1-accuracyPosition(now-meterStart)):0;const back=phase==='swing'&&human()?.55*(1-swing)+.51*swing:(.55+power*1.7)*(1-Math.max(swing,forward))+.51*Math.max(swing,forward);mallet.position.set(b.x-dx*back,0,b.z-dz*back);mallet.rotation.y=angle;}
 if(mouseOrbit||(!placing&&view==='shotview')){
-  const eyeHeight=shotEyeHeights[shotHeight];
-  let distance=eyeHeight?Math.max(2.5,shotDistance/3):shotDistance;
-  let height=eyeHeight??shotDistance*6.5/9;
+  const classicHeight=shotDistance*6.5/9;
+  const lowAmount=shotHeight==='low'?(phase==='moving'?1-shotPullback:1):0;
+  const lowDistance=Math.max(3,shotDistance*.36);
+  let distance=shotDistance+(lowDistance-shotDistance)*lowAmount;
+  let height=classicHeight+(2.55-classicHeight)*lowAmount;
+  const sideOffset=.65*lowAmount;
   const cameraAngle=shotCameraAngle+(mouseOrbit?.yaw??0);
   if(mouseOrbit?.pitch){
     const radius=Math.hypot(distance,height);
@@ -341,7 +361,7 @@ if(mouseOrbit||(!placing&&view==='shotview')){
     height=radius*Math.sin(pitch);
   }
   const sx=Math.sin(cameraAngle),sz=Math.cos(cameraAngle);
-  camGoal.set(b.x-sx*distance,height,b.z-sz*distance);
+  camGoal.set(b.x-sx*distance+sz*sideOffset,height,b.z-sz*distance-sx*sideOffset);
   lookGoal.set(b.x+sx*4,0,b.z+sz*4);
 }else if(placing&&placementView==='close'){const o=balls[match.croquetTarget];camGoal.set(o.x+Math.sin(placementYaw)*placementZoom*.55,placementZoom,o.z+Math.cos(placementYaw)*placementZoom*.55);lookGoal.set(o.x,0,o.z)}else if((placing?placementView:view)==='overhead'){camGoal.set(0,innerWidth<680?65:54,5);lookGoal.set(0,0,3)}else{const mobile=innerWidth<680;camGoal.set(mobile?31:36,mobile?58:49,mobile?63:52);lookGoal.set(mobile?0:-1,0,mobile?4:3)}if(mouseOrbit||!camInit){camera.position.copy(camGoal);look.copy(lookGoal);camInit=true}else{camera.position.lerp(camGoal,1-Math.exp(-dt*3));look.lerp(lookGoal,1-Math.exp(-dt*3))}if(camera.position.distanceTo(camGoal)<.001)camera.position.copy(camGoal);if(look.distanceTo(lookGoal)<.001)look.copy(lookGoal);camera.lookAt(look);updateYardRuler(b,dx,dz,rulerLength);hoopMeshes.forEach(g=>{const v=new THREE.Vector3(g.position.x,1.3,g.position.z).project(camera);const el=g.userData.label;el.style.left=(v.x*.5+.5)*renderWidth+'px';el.style.top=(-v.y*.5+.5)*renderHeight+'px';el.style.visibility=v.z>1?'hidden':'visible'});ring.material.opacity=.65+Math.sin(now*.002)*.2;drawMap();renderer.render(scene,camera)}
 initFullscreen($('fullscreen'),notice,resize);reset();requestAnimationFrame(frame);

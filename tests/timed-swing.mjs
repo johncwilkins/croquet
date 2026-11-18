@@ -60,7 +60,7 @@ let aimChanges=0;
 const orbitScope=vm.createContext({
   renderer:{domElement:canvas}, window:{addEventListener(){}}, document:{addEventListener(){}},
   phase:'aim', human:()=>true, swingStage:'idle', placing:false, view:'shotview',
-  shotCameraAngle:.2, shotDistance:9, shotHeight:'classic', shotEyeHeights:{'five-six':1.5,six:1.67}, camInit:true, placementPointer:null, b:{x:1,z:2},
+  shotCameraAngle:.2, shotDistance:9, shotHeight:'classic', shotPullback:0, camInit:true, placementPointer:null, b:{x:1,z:2},
   aimAt:()=>{aimChanges++}, THREE:{MathUtils:{clamp:(x,min,max)=>Math.min(max,Math.max(min,x))}},
   camGoal:{set(...value){this.xyz=value}},lookGoal:{set(...value){this.xyz=value}}
 });
@@ -83,11 +83,16 @@ assert.equal(orbitScope.shotCameraAngle,.2);
 console.log('PASS: middle mouse drag orbits and release restores the shot camera without changing aim');
 
 assert.equal(original[0][1],6.5);
-orbitScope.shotHeight='five-six';
-assert.equal(goals()[0][1],1.5);
-orbitScope.shotHeight='six';
+orbitScope.shotHeight='low';
 const lowView=goals();
-assert.equal(lowView[0][1],1.67);
+assert.equal(lowView[0][1],2.55);
+orbitScope.phase='moving';
+orbitScope.shotPullback=.5;
+assert.equal(goals()[0][1],(2.55+6.5)/2);
+orbitScope.shotPullback=1;
+assert.deepEqual(goals(),original);
+orbitScope.phase='aim';
+assert.deepEqual(goals(),lowView);
 listeners.pointerdown({button:1,pointerId:1,clientX:0,clientY:0,preventDefault(){}});
 listeners.pointermove({buttons:4,pointerId:1,clientX:100,clientY:-50});
 assert.notDeepEqual(goals(),lowView);
