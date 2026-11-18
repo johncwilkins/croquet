@@ -40,7 +40,7 @@ let prevented=false,stopped=false;scope.event={button:0,target:{id:'aim'},preven
 const count=scope.shots.length;vm.runInContext('centerFromAnywhere(event)',scope);assert(prevented&&stopped);assert.equal(scope.shots.length,count+1,'click on Fine Aim still strikes');assert.equal(scope.shots.at(-1).a,0);assert.equal(scope.accuracyClickUntil,21300);
 vm.runInContext('centerFromAnywhere(event)',scope);assert.equal(scope.shots.length,count+1,'second event cannot double-strike');
 // Camera choices read placement state without changing ball coordinates.
-const cameraCode=source.slice(source.indexOf("if(mouseOrbit){\n  const orbitAngle"),source.indexOf('if(mouseOrbit||!camInit)'));
+const cameraCode=source.slice(source.indexOf("if(mouseOrbit||(!placing&&view==='shotview')){"),source.indexOf('if(mouseOrbit||!camInit)'));
 const targetBall={x:4,z:7};const camScope=vm.createContext({mouseOrbit:null,placing:true,placementView:'close',placementYaw:0,placementZoom:4.5,match:{croquetTarget:0},balls:[targetBall],camGoal:{set(...v){this.xyz=v}},lookGoal:{set(...v){this.xyz=v}},innerWidth:1200,view:'wide'});
 vm.runInContext(cameraCode,camScope);assert.deepEqual(Array.from(camScope.lookGoal.xyz),[4,0,7]);const close=Array.from(camScope.camGoal.xyz);
 camScope.placementYaw=Math.PI/2;vm.runInContext(cameraCode,camScope);assert(camScope.camGoal.xyz[0]>close[0],'orbit rotates viewpoint');camScope.placementZoom=12;vm.runInContext(cameraCode,camScope);assert.equal(camScope.camGoal.xyz[1],12);
@@ -60,7 +60,7 @@ let aimChanges=0;
 const orbitScope=vm.createContext({
   renderer:{domElement:canvas}, window:{addEventListener(){}}, document:{addEventListener(){}},
   phase:'aim', human:()=>true, swingStage:'idle', placing:false, view:'shotview',
-  shotCameraAngle:.2, shotDistance:9, camInit:true, placementPointer:null, b:{x:1,z:2},
+  shotCameraAngle:.2, shotDistance:9, shotHeight:'classic', shotEyeHeights:{'five-six':1.5,six:1.67}, camInit:true, placementPointer:null, b:{x:1,z:2},
   aimAt:()=>{aimChanges++}, THREE:{MathUtils:{clamp:(x,min,max)=>Math.min(max,Math.max(min,x))}},
   camGoal:{set(...value){this.xyz=value}},lookGoal:{set(...value){this.xyz=value}}
 });
@@ -81,3 +81,15 @@ assert.equal(orbitScope.camInit,false);
 assert.deepEqual(goals(),original);
 assert.equal(orbitScope.shotCameraAngle,.2);
 console.log('PASS: middle mouse drag orbits and release restores the shot camera without changing aim');
+
+assert.equal(original[0][1],6.5);
+orbitScope.shotHeight='five-six';
+assert.equal(goals()[0][1],1.5);
+orbitScope.shotHeight='six';
+const lowView=goals();
+assert.equal(lowView[0][1],1.67);
+listeners.pointerdown({button:1,pointerId:1,clientX:0,clientY:0,preventDefault(){}});
+listeners.pointermove({buttons:4,pointerId:1,clientX:100,clientY:-50});
+assert.notDeepEqual(goals(),lowView);
+listeners.pointerup({pointerId:1});
+assert.deepEqual(goals(),lowView);

@@ -49,6 +49,13 @@ try {
   const saved=localStorage.getItem('croquet-player-accuracy');
   if(saved==='amateur'||saved==='pro')playerAccuracy=saved;
 } catch {}
+// Eye heights in court yards, measured below the top of the player's head.
+const shotEyeHeights={'five-six':1.5,'six':1.67};
+let shotHeight='classic';
+try {
+  const saved=localStorage.getItem('croquet-shot-height');
+  if(Object.hasOwn(shotEyeHeights,saved))shotHeight=saved;
+} catch {}
 let placementView='close',placementYaw=0,placementZoom=4.5,accuracyClickUntil=0;
 let placing=false,swingStage='idle',meterStart=0,placementPointer=null;
 let turn=0,point=0,scores=[0,0],mode='ai',phase='aim',angle=0,baseAngle=0,power=0,drag=null,spaceStart=0,view='wide',showRoute=false,shotAge=0,lastTime=performance.now(),aiTimer=null,audio=null,sound=false,camInit=false,scoredThisStroke=false,shotCameraAngle=0,swingStarted=0,shotDistance=9;
@@ -263,11 +270,15 @@ let controllerConnected=false;
 const controllerMenus=createMenuNavigator();
 const controllerFields=[['gpvariant','variant'],['gpplayers','players'],['gpmode','mode'],['gpdifficulty','difficulty'],['gpsetting','setting']];
 function controllerFieldState(){$('gpplayers').disabled=$('gpvariant').value==='golf';$('gpmode').disabled=$('gpvariant').value!=='golf'}
-function openControllerMenu(){if($('offsidedialog').open)return;if($('tossdialog').open){notice('Choose your opening colours first.');return}cancelMeter();if($('controllerdialog').open){$('controllerdialog').close();controllerMenus.clear();return}if($('helpdialog').open)$('helpdialog').close();for(const [dest,source]of controllerFields){$(dest).replaceChildren(...Array.from($(source).options).map(o=>o.cloneNode(true)));$(dest).value=$(source).value}controllerFieldState();$('gpaccuracy').value=playerAccuracy;$('controllerdialog').showModal();controllerMenus.clear();}
+function openControllerMenu(){if($('offsidedialog').open)return;if($('tossdialog').open){notice('Choose your opening colours first.');return}cancelMeter();if($('controllerdialog').open){$('controllerdialog').close();controllerMenus.clear();return}if($('helpdialog').open)$('helpdialog').close();for(const [dest,source]of controllerFields){$(dest).replaceChildren(...Array.from($(source).options).map(o=>o.cloneNode(true)));$(dest).value=$(source).value}controllerFieldState();$('gpaccuracy').value=playerAccuracy;$('gpshotheight').value=shotHeight;$('controllerdialog').showModal();controllerMenus.clear();}
 function closeControllerMenu(){$('controllerdialog').close();controllerMenus.clear();}
 $('controlleropen').onclick=openControllerMenu;$('controllerclose').onclick=$('gpreturn').onclick=closeControllerMenu;$('gpvariant').onchange=controllerFieldState;
 function applyControllerSettings(forceNew=false){const nextVariant=$('gpvariant').value,nextPlayers=$('gpplayers').value,nextMode=nextVariant==='golf'?$('gpmode').value:'ai',restart=forceNew||variant!==nextVariant||mode!==nextMode||(nextVariant!=='golf'&&$('players').value!==nextPlayers);closeControllerMenu();playerAccuracy=$('gpaccuracy').value;
-try {localStorage.setItem('croquet-player-accuracy',playerAccuracy)} catch {}
+shotHeight=$('gpshotheight').value;
+try {
+  localStorage.setItem('croquet-player-accuracy',playerAccuracy);
+  localStorage.setItem('croquet-shot-height',shotHeight);
+} catch {}
 $('difficulty').value=$('gpdifficulty').value;$('difficulty').onchange();$('setting').value=$('gpsetting').value;$('setting').onchange();if(restart){variant=nextVariant;mode=nextMode;$('variant').value=variant;$('players').value=nextPlayers;$('mode').value=mode;reset()}else updateUI();}
 $('gpapply').onclick=()=>applyControllerSettings(false);$('gpnew').onclick=()=>applyControllerSettings(true);
 $('gphelp').onclick=()=>{closeControllerMenu();$('help').click()};$('gpfull').onclick=()=>$('fullscreen').click();
@@ -318,16 +329,21 @@ function resize(){const mobile=innerWidth<=680,dock=$('shotpanel')||document.que
 const camGoal=new THREE.Vector3(),lookGoal=new THREE.Vector3(),look=new THREE.Vector3(0,0,2);let accumulator=0;
 function frame(now){requestAnimationFrame(frame);animateFlags(now/1000);animateSpectators(now/1000);const dt=Math.min((now-lastTime)/1000,.05);lastTime=now;controller.update(now);controllerHint();const b=current(),t=target();if(swingStage==='power'&&!drag)setPower(heldPower(now-meterStart));if(swingStage==='accuracy'){$('pad').style.setProperty('--drift',accuracyPosition(now-meterStart)*50+'%');if(now-meterStart>=ACCURACY_MS)finishMeter(now)}if(phase==='moving'){shotAge+=dt;accumulator+=dt;let n=0;while(accumulator>=1/240&&n++<16){physics(1/240);accumulator-=1/240}if(shotAge>.25&&balls.every(b=>Math.hypot(b.vx,b.vz)<.015&&!airborne(b))){balls.forEach(b=>{b.vx=b.vz=0});finishShot()}}
 balls.forEach(b=>{b.mesh.visible=onCourt(b);b.mesh.position.set(b.x,b.y??R,b.z);if(b.vx||b.vz){b.mesh.rotation.x+=b.vz*dt/R;b.mesh.rotation.z-=b.vx*dt/R}});activeRing.position.set(b.x,.03,b.z);activeRing.visible=phase==='aim';const dx=Math.sin(angle),dz=Math.cos(angle),rulerLength=distanceToBoundary(b,angle);line.visible=mallet.visible=!placing&&(phase==='aim'||phase==='swing');if(line.visible){const a=line.geometry.attributes.position;a.setXYZ(0,b.x,.07,b.z);a.setXYZ(1,b.x+dx*rulerLength,.07,b.z+dz*rulerLength);a.needsUpdate=true;line.geometry.computeBoundingSphere();line.computeLineDistances();const swing=phase==='swing'?Math.min(1,(now-swingStarted)/200):0;const forward=swingStage==='accuracy'?Math.min(1,1-accuracyPosition(now-meterStart)):0;const back=phase==='swing'&&human()?.55*(1-swing)+.51*swing:(.55+power*1.7)*(1-Math.max(swing,forward))+.51*Math.max(swing,forward);mallet.position.set(b.x-dx*back,0,b.z-dz*back);mallet.rotation.y=angle;}
-if(mouseOrbit){
-  const orbitAngle=shotCameraAngle+mouseOrbit.yaw;
-  const basePitch=Math.atan2(6.5,9);
-  const pitch=basePitch+mouseOrbit.pitch;
-  const radius=shotDistance/Math.cos(basePitch);
-  const dx=Math.sin(orbitAngle),dz=Math.cos(orbitAngle);
-  const distance=radius*Math.cos(pitch);
-  camGoal.set(b.x-dx*distance,radius*Math.sin(pitch),b.z-dz*distance);
-  lookGoal.set(b.x+dx*4,0,b.z+dz*4);
-}else if(placing&&placementView==='close'){const o=balls[match.croquetTarget];camGoal.set(o.x+Math.sin(placementYaw)*placementZoom*.55,placementZoom,o.z+Math.cos(placementYaw)*placementZoom*.55);lookGoal.set(o.x,0,o.z)}else if(!placing&&view==='shotview'){const sx=Math.sin(shotCameraAngle),sz=Math.cos(shotCameraAngle);camGoal.set(b.x-sx*shotDistance,shotDistance*6.5/9,b.z-sz*shotDistance);lookGoal.set(b.x+sx*4,0,b.z+sz*4)}else if((placing?placementView:view)==='overhead'){camGoal.set(0,innerWidth<680?65:54,5);lookGoal.set(0,0,3)}else{const mobile=innerWidth<680;camGoal.set(mobile?31:36,mobile?58:49,mobile?63:52);lookGoal.set(mobile?0:-1,0,mobile?4:3)}if(mouseOrbit||!camInit){camera.position.copy(camGoal);look.copy(lookGoal);camInit=true}else{camera.position.lerp(camGoal,1-Math.exp(-dt*3));look.lerp(lookGoal,1-Math.exp(-dt*3))}if(camera.position.distanceTo(camGoal)<.001)camera.position.copy(camGoal);if(look.distanceTo(lookGoal)<.001)look.copy(lookGoal);camera.lookAt(look);updateYardRuler(b,dx,dz,rulerLength);hoopMeshes.forEach(g=>{const v=new THREE.Vector3(g.position.x,1.3,g.position.z).project(camera);const el=g.userData.label;el.style.left=(v.x*.5+.5)*renderWidth+'px';el.style.top=(-v.y*.5+.5)*renderHeight+'px';el.style.visibility=v.z>1?'hidden':'visible'});ring.material.opacity=.65+Math.sin(now*.002)*.2;drawMap();renderer.render(scene,camera)}
+if(mouseOrbit||(!placing&&view==='shotview')){
+  const eyeHeight=shotEyeHeights[shotHeight];
+  let distance=eyeHeight?Math.max(2.5,shotDistance/3):shotDistance;
+  let height=eyeHeight??shotDistance*6.5/9;
+  const cameraAngle=shotCameraAngle+(mouseOrbit?.yaw??0);
+  if(mouseOrbit?.pitch){
+    const radius=Math.hypot(distance,height);
+    const pitch=Math.max(.12,Math.atan2(height,distance)+mouseOrbit.pitch);
+    distance=radius*Math.cos(pitch);
+    height=radius*Math.sin(pitch);
+  }
+  const sx=Math.sin(cameraAngle),sz=Math.cos(cameraAngle);
+  camGoal.set(b.x-sx*distance,height,b.z-sz*distance);
+  lookGoal.set(b.x+sx*4,0,b.z+sz*4);
+}else if(placing&&placementView==='close'){const o=balls[match.croquetTarget];camGoal.set(o.x+Math.sin(placementYaw)*placementZoom*.55,placementZoom,o.z+Math.cos(placementYaw)*placementZoom*.55);lookGoal.set(o.x,0,o.z)}else if((placing?placementView:view)==='overhead'){camGoal.set(0,innerWidth<680?65:54,5);lookGoal.set(0,0,3)}else{const mobile=innerWidth<680;camGoal.set(mobile?31:36,mobile?58:49,mobile?63:52);lookGoal.set(mobile?0:-1,0,mobile?4:3)}if(mouseOrbit||!camInit){camera.position.copy(camGoal);look.copy(lookGoal);camInit=true}else{camera.position.lerp(camGoal,1-Math.exp(-dt*3));look.lerp(lookGoal,1-Math.exp(-dt*3))}if(camera.position.distanceTo(camGoal)<.001)camera.position.copy(camGoal);if(look.distanceTo(lookGoal)<.001)look.copy(lookGoal);camera.lookAt(look);updateYardRuler(b,dx,dz,rulerLength);hoopMeshes.forEach(g=>{const v=new THREE.Vector3(g.position.x,1.3,g.position.z).project(camera);const el=g.userData.label;el.style.left=(v.x*.5+.5)*renderWidth+'px';el.style.top=(-v.y*.5+.5)*renderHeight+'px';el.style.visibility=v.z>1?'hidden':'visible'});ring.material.opacity=.65+Math.sin(now*.002)*.2;drawMap();renderer.render(scene,camera)}
 initFullscreen($('fullscreen'),notice,resize);reset();requestAnimationFrame(frame);
 // Small read-only state surface for verifying the simulation in a browser.
 window.croquet={getState:()=>({variant,strokes:match?.strokes,croquetTarget:match?.croquetTarget,turn:names[turn],point,scores:[...scores],phase,balls:balls.map(b=>({name:b.name,x:b.x,z:b.z,entered:b.entered,progress:b.progress,finished:b.finished})),target:target()})};
