@@ -13,7 +13,7 @@ import {CanvasRenderer} from './fallback.js';
 import {beginHoopStroke,trackHoopSegment,hoopWinner,resetHoopProgress} from './scoring.js';
 import {chooseShot,chooseJumpShot,chooseBreakShot,chooseCroquetShot,shotUncertainty,COMPUTER_LEVELS} from './tactics.js';
 import {createGrounds} from './grounds.js';
-import {createMallet,createWicket,createFlags,createPlanting,createSpectators,createWornGrass} from './details.js';
+import {createMallet,createWicket,createFlags,createPlanting,createSpectators,createPeg} from './details.js';
 const $=id=>document.getElementById(id), scene=new THREE.Scene();
 // Suppress selection/callout gestures while aiming or swinging on touchscreens.
 for(const event of ['contextmenu','selectstart'])document.addEventListener(event,e=>{if(!e.target.closest('#helpdialog'))e.preventDefault()});
@@ -32,7 +32,7 @@ createPlanting(scene);const animateSpectators=createSpectators(scene,!(renderer 
 for(const z of [-10,9]){box(1.2,.18,4,wood,-18,.85,z);box(.15,1.2,4,wood,-18.55,1.2,z);for(const dz of [-1.5,1.5]){box(.18,.8,.2,darkwood,-18,.4,z+dz)}}
 const animateFlags=createFlags(scene);
 let variant='golf',match=null;const hoopPos=[],posts=[],hoopMeshes=[],stakeMeshes=[],seq=[];
-function setCourse(kind){for(const g of hoopMeshes){scene.remove(g);g.userData.label.remove()}for(const g of stakeMeshes)scene.remove(g);hoopPos.length=posts.length=hoopMeshes.length=stakeMeshes.length=seq.length=0;const c=VARIANTS[kind];hoopPos.push(...c.hoops);seq.push(...c.route);hoopPos.forEach(([x,z],i)=>{const colorIndex=kind==='association'?(i===4?5:i===5?4:i):i;const g=createWicket(x,z,colorIndex);for(const side of [-1,1])posts.push({x:x+side*.33,z,r:.045});scene.add(g);hoopMeshes.push(g);const label=document.createElement('span');label.className='hoop-label';$('labels').appendChild(label);g.userData.label=label});for(const p of c.stakes){const g=new THREE.Group();createWornGrass(g,0,0,.38,'peg');cyl(.075,.8,white,0,.4,0,g);['#2874ce','#c74e43','#22272b','#e6ba35'].forEach((c,i)=>cyl(.077,.12,mat(c),0,.74-i*.12,0,g));g.position.set(p.x,0,p.z);scene.add(g);stakeMeshes.push(g);posts.push({...p,r:.075,height:.8})}renderer.lastKey=''}
+function setCourse(kind){for(const g of hoopMeshes){scene.remove(g);g.userData.label.remove()}for(const g of stakeMeshes)scene.remove(g);hoopPos.length=posts.length=hoopMeshes.length=stakeMeshes.length=seq.length=0;const c=VARIANTS[kind];hoopPos.push(...c.hoops);seq.push(...c.route);hoopPos.forEach(([x,z],i)=>{const colorIndex=kind==='association'?(i===4?5:i===5?4:i):i;const g=createWicket(x,z,colorIndex);for(const side of [-1,1])posts.push({x:x+side*.33,z,r:.045});scene.add(g);hoopMeshes.push(g);const label=document.createElement('span');label.className='hoop-label';$('labels').appendChild(label);g.userData.label=label});for(const p of c.stakes){const g=createPeg(p.x,p.z);scene.add(g);stakeMeshes.push(g);posts.push({...p,r:.075,height:.8})}renderer.lastKey=''}
 const ring=new THREE.Mesh(new THREE.RingGeometry(.65,.73,48),new THREE.MeshBasicMaterial({color:'#f1cc79',side:THREE.DoubleSide,transparent:true,opacity:.85}));ring.rotation.x=-Math.PI/2;ring.position.y=.035;scene.add(ring);
 const arrow=new THREE.ArrowHelper(new THREE.Vector3(0,0,-1),new THREE.Vector3(0,.05,0),1.75,'#ffe1a0',.45,.3);scene.add(arrow);
 const names=['Blue','Red','Black','Yellow'],colors=['#2375cd','#d9483e','#20262c','#e5b732'];const R=.14,F=2.2,MAX=15;
