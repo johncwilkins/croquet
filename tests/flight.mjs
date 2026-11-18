@@ -1,3 +1,4 @@
+import {OffsideRule} from '../dist/offside.js';
 import assert from 'node:assert/strict';
 import {launchVelocity,airborne,advanceFlight,collideBalls,collideArch,collideUpright,R} from '../dist/flight.js';
 import {beginHoopStroke,trackHoopSegment} from '../dist/scoring.js';
@@ -11,5 +12,6 @@ const h={x:0,z:0,key:1,direction:1};a=ball(0,-.3,1.2);beginHoopStroke(a,h);let f
 // a stronger jump flies over a wicket without scoring it.
 import fs from 'node:fs';import vm from 'node:vm';import * as flight from '../dist/flight.js';
 const source=fs.readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');const physicsSource=source.slice(source.indexOf('function grassInfluence'),source.indexOf('function finishShot'));
-function simulate(speed,opponentZ,hoopZ){const v=launchVelocity(speed,true),balls=[{...ball(0,0),vz:v.horizontal,vy:v.vertical,side:0},{...ball(0,opponentZ),side:1},{...ball(8,8),entered:false},{...ball(9,9),entered:false}];const hoop={x:0,z:hoopZ,key:1,direction:1};balls.forEach(b=>beginHoopStroke(b,hoop));const ctx={Math,R,F:2.2,THREE:{MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(b,v))}},balls,match:null,posts:[],hoopPos:[[0,hoopZ]],scoringHoop:()=>hoop,beep:()=>{},trackHoopSegment,...flight};vm.createContext(ctx);vm.runInContext(physicsSource,ctx);for(let i=0;i<2400;i++)ctx.physics(1/240);return balls}
+function simulate(speed,opponentZ,hoopZ){const v=launchVelocity(speed,true),balls=[{...ball(0,0),vz:v.horizontal,vy:v.vertical,side:0},{...ball(0,opponentZ),side:1},{...ball(8,8),entered:false},{...ball(9,9),entered:false}];const hoop={x:0,z:hoopZ,key:1,direction:1};balls.forEach(b=>beginHoopStroke(b,hoop));const ctx={Math,R,F:2.2,THREE:{MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(b,v))}},balls,match:null,posts:[],hoopPos:[[0,hoopZ]],scoringHoop:()=>hoop,beep:()=>{},trackHoopSegment,onCourt:b=>b.entered&&!b.finished&&!b.offsidePenalty,...flight};ctx.offsideRule=new OffsideRule();ctx.offsideRule.begin(balls[0]);vm.createContext(ctx);vm.runInContext(physicsSource,ctx);for(let i=0;i<2400;i++)ctx.physics(1/240);return balls}
 let balls=simulate(5,1,12);assert.equal(balls[1].z,1,'jump clears opponent in live physics');assert.equal(balls[0].y,R);assert(!airborne(balls[0]));balls=simulate(10,12,4);assert(!balls[0].candidate,'flying over the wicket never scores in live physics');console.log('PASS: launch, flight, landing, opponent clearance and clipping, hoop arch collisions, height-aware scoring and live jump physics');
+
