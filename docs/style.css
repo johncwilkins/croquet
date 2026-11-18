@@ -39,7 +39,7 @@
 
 body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}button,canvas,#pad,input[type="range"]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}#helpdialog{-webkit-user-select:text;user-select:text}
 
-.multiplayer .scoreboard #them{font:600 10px/1.6 'DM Sans',Arial,sans-serif;white-space:normal}.multiplayer .scoreboard>div:last-child{max-width:190px}.multiplayer .scoreboard>div:first-child .dot.black{display:none}footer select[hidden]{display:none}@media(max-width:680px){footer #players{max-width:130px}.multiplayer .scoreboard>div:last-child{display:block}.multiplayer .scoreboard #them{font-size:9px}}
+.multiplayer .scoreboard #them{font:600 10px/1.6 'DM Sans',Arial,sans-serif;white-space:normal}.multiplayer .scoreboard>div:last-of-type{max-width:190px}.multiplayer .scoreboard>div:first-child .dot.black{display:none}footer select[hidden]{display:none}@media(max-width:680px){footer #players{max-width:130px}.multiplayer .scoreboard>div:last-of-type{display:block}.multiplayer .scoreboard #them{font-size:9px}}
 
 /* Keep the court visible right up to the top edge. */
 header{background:none}
@@ -55,9 +55,25 @@ header{background:none}
 
 @media(min-width:681px){.placing .shotpanel{padding:14px 22px}.placing .turn{width:100%;align-items:center}.placing .turn>div{display:grid;grid-template-columns:1fr 430px;column-gap:28px;width:100%;align-items:center}.placing #contactcontrols{grid-column:2;grid-row:1/4;width:430px;margin:0}.placing h1{font-size:27px;margin:6px 0}.placing #hint{align-self:start}.placing #ballbadge{width:28px;height:28px}}
 
-#placementtargets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 15px;max-width:490px;margin-top:8px}#placementtargets[hidden]{display:none!important}.ball-target-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:11px;line-height:1.4}.target-ball-dot{height:9px;width:9px;border-radius:50%;border:1px solid #173e3155;flex-shrink:0}.ball-target-row b{font-size:11px}.ball-target-row>span{color:#526d58}.wicket-ball-targets{display:flex;flex-wrap:wrap;justify-content:center;gap:3px;margin-top:3px;max-width:180px}.wicket-ball-tag{font-size:9px;line-height:1.4;border-radius:7px;padding:2px 5px;white-space:nowrap;text-shadow:none}
-@media(min-width:681px){.placing #contactcontrols{grid-row:1/5}.placing #placementtargets{grid-column:1;grid-row:4}}
-@media(max-width:680px){#placementtargets{gap:3px 8px;margin-top:5px}.ball-target-row,.ball-target-row b{font-size:10px}.wicket-ball-tag{font-size:8px;padding:1px 4px}}
+#scoretargets{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  flex:0 0 100%;gap:4px 8px;padding-top:5px;border-top:1px solid #173e3133;
+}
+#scoretargets[hidden]{display:none}
+.has-score-targets .scoreboard{flex-wrap:wrap;row-gap:5px}
+.ball-target-row{display:grid;grid-template-columns:7px minmax(0,1fr);align-items:center;column-gap:4px;font-size:10px;line-height:1.25}
+.target-ball-dot{height:7px;width:7px;border-radius:50%;border:1px solid #173e3155}
+.ball-target-row>span{grid-column:2;color:#526d58}
+@media(min-width:681px){
+  .has-score-targets .course{margin-top:62px}
+}
+@media(max-width:680px){
+  .has-score-targets .scoreboard{height:96px;align-content:center}
+  .has-score-targets .shotpanel{bottom:137px}
+}
+.wicket-ball-targets{display:flex;flex-wrap:wrap;justify-content:center;gap:3px;margin-top:3px;max-width:180px}.wicket-ball-tag{font-size:9px;line-height:1.4;border-radius:7px;padding:2px 5px;white-space:nowrap;text-shadow:none}
+@media(min-width:681px){.placing #contactcontrols{grid-row:1/5}}
+@media(max-width:680px){.wicket-ball-tag{font-size:8px;padding:1px 4px}}
 
 #difficulty{max-width:180px}#difficulty[hidden]{display:none!important}@media(max-width:680px){.header-actions{width:202px;grid-template-columns:1fr auto;gap:4px}.header-actions #setting{grid-column:1/3;width:100%;max-width:202px}.header-actions #difficulty{max-width:132px;width:132px;font-size:9px;padding:7px 14px 7px 7px}.header-actions #help{font-size:9px;padding:7px}.header-actions #sound{display:none}}
 

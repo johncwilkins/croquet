@@ -123,7 +123,29 @@ function finishMeter(now){
   resetMeter();
   strike(angle+error,power,$('jump').getAttribute('aria-pressed')==='true',lastTiming);
 }
-function updateBallTargets(){const panel=$('placementtargets');panel.hidden=!placing;panel.replaceChildren();if(!placing||!match)return;const targets=nextBallTargets(match,balls);for(const entry of targets){const item=document.createElement('div'),dot=document.createElement('i'),name=document.createElement('b'),label=document.createElement('span');dot.className='target-ball-dot';dot.style.background=colors[entry.index];name.textContent=entry.name;label.textContent=entry.label;item.append(dot,name,label);item.className='ball-target-row';panel.append(item);}for(const [i,g]of hoopMeshes.entries()){const entries=targets.filter(e=>!e.finished&&e.target.h===i);if(!entries.length)continue;const group=document.createElement('span');group.className='wicket-ball-targets';for(const entry of entries){const tag=document.createElement('span');tag.className='wicket-ball-tag';tag.style.background=colors[entry.index];tag.style.color=entry.index===3?'#172b26':'#fff';tag.textContent=entry.name+(entry.target.d<0?' ↑':' ↓');group.append(tag)}g.userData.label.append(group);}}
+function updateBallTargets(){
+  const panel=$('scoretargets');
+  panel.hidden=!match;
+  document.body.classList.toggle('has-score-targets',!!match);
+  panel.replaceChildren();
+  if(!match)return;
+  const targets=nextBallTargets(match,balls);
+  for(const entry of targets){
+    const item=document.createElement('div');
+    const dot=document.createElement('i');
+    const name=document.createElement('strong');
+    const label=document.createElement('span');
+    item.className='ball-target-row';
+    dot.className='target-ball-dot';
+    dot.style.background=colors[entry.index];
+    name.textContent=entry.name;
+    label.textContent=entry.label.replace(' · ↑ North',' ↑').replace(' · ↓ South',' ↓');
+    label.title=entry.label;
+    item.append(dot,name,label);
+    panel.append(item);
+  }
+  if(!placing)return;
+  for(const [i,g]of hoopMeshes.entries()){const entries=targets.filter(e=>!e.finished&&e.target.h===i);if(!entries.length)continue;const group=document.createElement('span');group.className='wicket-ball-targets';for(const entry of entries){const tag=document.createElement('span');tag.className='wicket-ball-tag';tag.style.background=colors[entry.index];tag.style.color=entry.index===3?'#172b26':'#fff';tag.textContent=entry.name+(entry.target.d<0?' ↑':' ↓');group.append(tag)}g.userData.label.append(group);}}
 function updatePlacementUI(){updateBallTargets();const contact=match?.croquetTarget!==null&&match?.croquetTarget!==undefined&&human();document.body.classList.toggle('placing',placing);grounds.setShotView(placing?placementView==='close':view==='shotview');$('contactcontrols').hidden=!contact||phase!=='aim';$('contactangle').hidden=!placing;$('placeconfirm').hidden=!placing;$('placeedit').hidden=!contact||placing;$('placeconfirm').disabled=placing&&!croquetPositionValid();$('pad').setAttribute('aria-disabled',String(placing||phase!=='aim'||!human()));$('placementviews').hidden=!placing;$('placementorbit').hidden=!placing||placementView!=='close';for(const id of ['close','wide','overhead'])$('place'+id).setAttribute('aria-pressed',String(placementView===id));if(placing){$('shotheading').textContent='Place your ball';$('hint').textContent='Tap or drag around '+names[match.croquetTarget]+', or use the slider. Use Court or Overhead for context, then Close to position and confirm.';$('contactvalid').textContent=croquetPositionValid()?'Place '+current().name+' around '+names[match.croquetTarget]:'Blocked — choose another side';$('status').textContent='Place '+current().name+' · no stroke yet';}}
 function positionContact(a){if(!placing)return;match.placeCroquet(a);$('contactangle').value=a*180/Math.PI;guideAim();updateUI();}
 $('placeconfirm').onclick=()=>{if(!placing||!croquetPositionValid())return;placing=false;view='shotview';guideAim(true);for(const id of ['wide','shotview','overhead'])$(id).classList.toggle('active',id===view);updateUI();};
