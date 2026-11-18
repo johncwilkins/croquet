@@ -425,7 +425,6 @@ if(mouseOrbit||(!placing&&view==='shotview')){
   const lowDistance=Math.max(3,shotDistance*.36);
   let distance=shotDistance+(lowDistance-shotDistance)*lowAmount;
   let height=classicHeight+(2.55-classicHeight)*lowAmount;
-  const sideOffset=.65*lowAmount;
   const cameraAngle=shotCameraAngle+(mouseOrbit?.yaw??0);
   if(mouseOrbit?.pitch){
     const radius=Math.hypot(distance,height);
@@ -434,7 +433,7 @@ if(mouseOrbit||(!placing&&view==='shotview')){
     height=radius*Math.sin(pitch);
   }
   const sx=Math.sin(cameraAngle),sz=Math.cos(cameraAngle);
-  camGoal.set(b.x-sx*distance+sz*sideOffset,height,b.z-sz*distance-sx*sideOffset);
+  camGoal.set(b.x-sx*distance,height,b.z-sz*distance);
   lookGoal.set(b.x+sx*4,0,b.z+sz*4);
 }else if(placing&&placementView==='close'){const o=balls[match.croquetTarget];camGoal.set(o.x+Math.sin(placementYaw)*placementZoom*.55,placementZoom,o.z+Math.cos(placementYaw)*placementZoom*.55);lookGoal.set(o.x,0,o.z)}else if((placing?placementView:view)==='overhead'){camGoal.set(0,innerWidth<680?65:54,5);lookGoal.set(0,0,3)}else{const mobile=innerWidth<680;camGoal.set(mobile?31:36,mobile?58:49,mobile?63:52);lookGoal.set(mobile?0:-1,0,mobile?4:3)}if(mouseOrbit||!camInit){camera.position.copy(camGoal);look.copy(lookGoal);camInit=true}else{camera.position.lerp(camGoal,1-Math.exp(-dt*3));look.lerp(lookGoal,1-Math.exp(-dt*3))}if(camera.position.distanceTo(camGoal)<.001)camera.position.copy(camGoal);if(look.distanceTo(lookGoal)<.001)look.copy(lookGoal);camera.lookAt(look);updateYardRuler(b,dx,dz,rulerLength);hoopMeshes.forEach(g=>{const v=new THREE.Vector3(g.position.x,1.3,g.position.z).project(camera);const el=g.userData.label;el.style.left=(v.x*.5+.5)*renderWidth+'px';el.style.top=(-v.y*.5+.5)*renderHeight+'px';el.style.visibility=v.z>1?'hidden':'visible'});ring.material.opacity=.65+Math.sin(now*.002)*.2;drawMap();renderer.render(scene,camera)}
 initFullscreen($('fullscreen'),notice,resize);reset();
