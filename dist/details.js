@@ -39,6 +39,92 @@ export function createWornGrass(parent,x,z,radius=.25,kind='wicket'){
  const positions=[],tints=[];for(let i=0;i<30;i++){const a=rnd()*Math.PI*2,r=radius*(.2+rnd()*.5),px=Math.cos(a)*r,pz=Math.sin(a)*r,h=.007+rnd()*.018,w=.0015+rnd()*.0015,leanX=(rnd()-.5)*.025,leanZ=(rnd()-.5)*.025;
  positions.push(px-w,-.005,pz,px+w,-.005,pz,px+leanX,h,pz+leanZ);const straw=i%3!==0;for(let k=0;k<3;k++)tints.push(straw?.50+rnd()*.14:.29+rnd()*.1,straw?.45+rnd()*.12:.35+rnd()*.1,straw?.24+rnd()*.09:.16+rnd()*.07);}
  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(tints,3));geo.computeVertexNormals();const blades=mesh(g,geo,new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:1}));blades.castShadow=false;return g;}
+// A continuous profile keeps the cap and painted bands on one surface.
+let pegGeometry, pegMaterial;
+const PEG_HEIGHT=.8, PEG_RADIUS=.075, PEG_BEVEL=.016;
+function pegPaint(){
+  const canvas=document.createElement('canvas');
+  canvas.width=512;
+  canvas.height=1024;
+  const ctx=canvas.getContext('2d');
+  const {width,height}=canvas;
+  const paints=['#316c9e','#a54c40','#333438','#c8a044','#e2dfd0'];
+  const boundaries=[0,154,300,448,595];
+  for(let i=0;i<paints.length;i++){
+    ctx.fillStyle=paints[i];
+    ctx.fillRect(0,boundaries[i],width,(boundaries[i+1]??height)-boundaries[i]);
+  }
+
+  // Brush streaks, shallow dents and chips along the crown and paint edges.
+  for(let i=0;i<440;i++){
+    const x=rnd()*width,y=rnd()*height;
+    ctx.fillStyle=i%2?'#fff9da17':'#30281722';
+    ctx.fillRect(x,y,.5+rnd()*2,3+rnd()*57);
+  }
+  for(const edge of [20,...boundaries.slice(1)]){
+    for(let i=0;i<16;i++){
+      const x=rnd()*width,y=edge+(rnd()-.5)*24;
+      const chipWidth=1+rnd()*8,chipHeight=2+rnd()*16;
+      ctx.fillStyle='#5d49345e';
+      ctx.beginPath();
+      ctx.ellipse(x,y,chipWidth,chipHeight,.16,0,Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle=i%3?'#b9996db8':'#d4bc917d';
+      ctx.beginPath();
+      ctx.ellipse(x-1,y-2,chipWidth*.7,chipHeight*.7,.16,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+  for(let i=0;i<85;i++){
+    const x=rnd()*width,y=895+rnd()*129;
+    ctx.fillStyle=i%2?'#67513b45':'#706c4b55';
+    ctx.beginPath();
+    ctx.ellipse(x,y,1+rnd()*6,2+rnd()*16,0,0,Math.PI*2);
+    ctx.fill();
+  }
+  const map=new THREE.CanvasTexture(canvas);
+  map.colorSpace=THREE.SRGBColorSpace;
+  map.wrapS=THREE.RepeatWrapping;
+  map.anisotropy=8;
+  map.userData.kind='peg-paint';
+  map.userData.baseColor=paints.at(-1);
+  return material(map,.86,{bumpScale:.0008});
+}
+
+export function createPeg(x,z){
+  if(!pegGeometry){
+    const profile=[
+      new THREE.Vector2(0,-.006),
+      new THREE.Vector2(PEG_RADIUS*.95,-.006),
+      new THREE.Vector2(PEG_RADIUS,.016),
+      new THREE.Vector2(PEG_RADIUS,PEG_HEIGHT-PEG_BEVEL)
+    ];
+    for(let i=1;i<=6;i++){
+      const angle=i*Math.PI/12;
+      profile.push(new THREE.Vector2(
+        PEG_RADIUS-PEG_BEVEL*(1-Math.cos(angle)),
+        PEG_HEIGHT-PEG_BEVEL*(1-Math.sin(angle))
+      ));
+    }
+    profile.push(new THREE.Vector2(0,PEG_HEIGHT));
+    pegGeometry=new THREE.LatheGeometry(profile,40);
+    const positions=pegGeometry.attributes.position,uv=pegGeometry.attributes.uv;
+    for(let i=0;i<positions.count;i++){
+      const height=Math.max(0,positions.getY(i));
+      const radius=Math.hypot(positions.getX(i),positions.getZ(i));
+      const topWear=height>PEG_HEIGHT-.001?(1-radius/PEG_RADIUS)*.035:0;
+      uv.setY(i,Math.min(1,.95*height/PEG_HEIGHT+topWear));
+    }
+    pegMaterial=pegPaint();
+  }
+  const group=new THREE.Group();
+  group.position.set(x,0,z);
+  createWornGrass(group,0,0,.38,'peg');
+  const post=mesh(group,pegGeometry,pegMaterial);
+  post.name='Weathered croquet peg';
+  return group;
+}
+
 export function createWicket(x,z,index){const g=new THREE.Group();g.position.set(x,0,z);const paint=material(texture('iron','#e8e7da'),.8,{metalness:.18});mesh(g,new THREE.TubeGeometry(new ArchCurve(),48,.045,10,false),paint);if(index===0||index===5){const arc=new THREE.EllipseCurve(0,.57,.33,.33,Math.PI*.25,Math.PI*.75,false);const pts=arc.getPoints(16).map(p=>new THREE.Vector3(p.x,p.y,0));mesh(g,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),16,.046,10,false),material(texture('iron',index===0?'#3575af':'#b74c40'),.75,{metalness:.15}))}
  const rustCanvas=document.createElement('canvas');rustCanvas.width=rustCanvas.height=256;const rc=rustCanvas.getContext('2d');rc.fillStyle='#d6d2be';rc.fillRect(0,0,256,256);
  for(let i=0;i<1700;i++){const yy=rnd()*256,depth=yy/256;if(rnd()>.08+depth*.85)continue;rc.fillStyle=['#61432e','#9d6339','#ba7945','#857449','#c4b18a'][i%5];rc.beginPath();rc.ellipse(rnd()*256,yy,.5+rnd()*5,1+rnd()*9,0,0,Math.PI*2);rc.fill()}
