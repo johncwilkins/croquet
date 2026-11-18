@@ -55,25 +55,74 @@ try {
   if(['low','six','five-six'].includes(saved))shotHeight='low';
 } catch {}
 let shotPullback=0;
+let lastTiming=null, committedTiming=null;
+const MALLET_CONTACT=.51;
 let placementView='close',placementYaw=0,placementZoom=4.5,accuracyClickUntil=0;
 let placing=false,swingStage='idle',meterStart=0,placementPointer=null;
-let turn=0,point=0,scores=[0,0],mode='ai',phase='aim',angle=0,baseAngle=0,power=0,drag=null,spaceStart=0,view='wide',showRoute=false,shotAge=0,lastTime=performance.now(),aiTimer=null,audio=null,sound=false,camInit=false,scoredThisStroke=false,shotCameraAngle=0,swingStarted=0,shotDistance=9;
+let turn=0,point=0,scores=[0,0],mode='ai',phase='aim',angle=0,baseAngle=0,power=0,drag=null,spaceStart=0,view=shotHeight==='low'?'shotview':'wide',showRoute=false,shotAge=0,lastTime=performance.now(),aiTimer=null,audio=null,sound=false,camInit=false,scoredThisStroke=false,shotCameraAngle=0,swingStarted=0,shotDistance=9;
 const coords=t=>t.x!==undefined?[t.x,t.z]:hoopPos[t.h];
 const scoringHoop=()=>{const t=target(),[x,z]=coords(t);return {key:point,x,z,direction:t.d}};
 const target=()=>match?match.target():seq[Math.min(point,12)],current=()=>balls[turn],human=()=>match?.individual?turn===humanBall:mode==='local'||turn%2===humanSide;
 function notice(t){$('toast').textContent=t;$('toast').classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>$('toast').classList.remove('show'),2700)}
 function beep(freq=350,length=.06){if(!sound)return;audio ||= new (window.AudioContext||window.webkitAudioContext)();audio.resume();const o=audio.createOscillator(),g=audio.createGain();o.type='sine';o.frequency.setValueAtTime(freq,audio.currentTime);g.gain.setValueAtTime(.14,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+length);o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+length)}
-function guideAim(courseOnly=false){shotDistance=9;const b=current();const [x,z]=coords(target()),aimTarget=courseOnly?{x,z}:shotAimTarget(balls,{x,z},match?.croquetTarget);baseAngle=angle=wicketHeading(b,aimTarget);b.aimAngle=angle;$('jump').setAttribute('aria-pressed','false');$('jump').textContent='Roll shot';$('swingfeedback').textContent='Pull back, release, then tap at center';$('aim').value=0;$('aimvalue').value='0°';shotCameraAngle=angle;$('distance').textContent=courseOnly?'Next wicket · adjust for your croquet stroke':match?.croquetTarget!==null&&match?.croquetTarget!==undefined?'Croquet · aim at '+names[match.croquetTarget]:'Yard marks show distance · choose your aim';setPower(0)}
+function guideAim(courseOnly=false){shotDistance=9;const b=current();const [x,z]=coords(target()),aimTarget=courseOnly?{x,z}:shotAimTarget(balls,{x,z},match?.croquetTarget);baseAngle=angle=wicketHeading(b,aimTarget);b.aimAngle=angle;$('jump').setAttribute('aria-pressed','false');$('jump').textContent='Roll shot';if(lastTiming===null)$('swingfeedback').textContent='Release, then tap as the mallet reaches the ball';$('aim').value=0;$('aimvalue').value='0°';shotCameraAngle=angle;$('distance').textContent=courseOnly?'Next wicket · adjust for your croquet stroke':match?.croquetTarget!==null&&match?.croquetTarget!==undefined?'Croquet · aim at '+names[match.croquetTarget]:'Yard marks show distance · choose your aim';setPower(0)}
 for(const [key,rules] of Object.entries(VARIANTS)){const section=document.createElement('details'),title=document.createElement('summary');title.textContent=rules.name;section.append(title);for(const text of [rules.summary,rules.details]){const paragraph=document.createElement('p');paragraph.textContent=text;section.append(paragraph)}const limits=document.createElement('p');limits.className='note';limits.textContent='In this app: '+rules.limit;section.append(limits);const link=document.createElement('a');link.href=rules.url;link.target='_blank';link.rel='noreferrer';link.textContent='Official '+rules.name+' rules ↗';section.append(link);$('allrules').append(section)}
 $('jump').onclick=()=>{if(phase!=='aim'||!human())return;const enabled=$('jump').getAttribute('aria-pressed')!=='true';$('jump').setAttribute('aria-pressed',String(enabled));$('jump').textContent=enabled?'Jump shot ↗':'Roll shot';setPower(power)};
 const desktopShot=matchMedia('(pointer:fine)').matches;document.body.classList.toggle('desktop-shot',desktopShot);
-$('pad').setAttribute('aria-label','Hold and pull back to set power, release, then tap when the accuracy marker reaches the center');
+$('pad').setAttribute('aria-label','Hold and pull back to set power, release, then tap when the mallet reaches the ball');
 function setPower(p){power=Math.max(0,Math.min(1,p));$('powerfill').style.width=power*100+'%';$('powertext').textContent=power>.01?Math.round(power*100)+'% power'+($('jump').getAttribute('aria-pressed')==='true'?' · jump':' · '+(MAX*MAX*power*power/(2*F)).toFixed(1)+' yd est.'):desktopShot?'Pull left · Shift for fine power':'Pull down to set power';}
-function resetMeter(){swingStage='idle';spaceStart=0;drag=null;$('pad').classList.remove('pulling','centering');$('pulltitle').textContent=desktopShot?'PULL LEFT FOR POWER':'PULL DOWN FOR POWER';$('swingfeedback').textContent='Release, then tap at center';$('pad').style.setProperty('--drift','0%');}
+function resetMeter(){
+  swingStage='idle';
+  spaceStart=0;
+  drag=null;
+  const pad=$('pad');
+  pad.classList.remove('pulling','centering');
+  $('pulltitle').textContent=desktopShot?'PULL LEFT FOR POWER':'PULL DOWN FOR POWER';
+  if(lastTiming===null){
+    $('swingfeedback').textContent='Release, then tap as the mallet reaches the ball';
+    pad.style.setProperty('--drift','0%');
+    pad.classList.remove('timing-result');
+  }else{
+    const error=timingError(lastTiming);
+    $('swingfeedback').textContent=error>0?'Early':error<0?'Late':'Centered';
+    pad.style.setProperty('--drift',lastTiming*50+'%');
+    pad.classList.add('timing-result');
+  }
+}
 function cancelMeter(){resetMeter();setPower(0)}
-function startMeter(now,gesture=null){if($('controllerdialog').open)return;if(phase!=='aim'||!human()||placing||$('helpdialog').open)return;if(swingStage==='accuracy'){finishMeter(now);return}if(swingStage!=='idle')return;swingStage='power';meterStart=now;drag=gesture;$('pulltitle').textContent='RELEASE TO LOCK POWER';$('swingfeedback').textContent=gesture?'Pull farther for power · ease back to reduce':'Power builds while Space is held';$('pad').classList.add('pulling');setPower(gesture?0:.025);}
-function releaseMeter(now){if(swingStage!=='power')return;if(!drag)setPower(heldPower(now-meterStart));if(power<.025){cancelMeter();return}drag=null;swingStage='accuracy';$('pad').classList.add('centering');meterStart=now;$('pulltitle').textContent='TAP AT CENTER';$('swingfeedback').textContent='Center band = most accurate shot';$('pad').style.setProperty('--drift','50%');}
-function finishMeter(now){if(swingStage!=='accuracy')return;const position=accuracyPosition(now-meterStart),error=timingError(position);resetMeter();strike(angle+error,power,$('jump').getAttribute('aria-pressed')==='true');}
+function startMeter(now,gesture=null){
+  if($('controllerdialog').open||phase!=='aim'||!human()||placing||$('helpdialog').open)return;
+  if(swingStage==='accuracy'){finishMeter(now);return}
+  if(swingStage!=='idle')return;
+  lastTiming=null;
+  resetMeter();
+  swingStage='power';
+  meterStart=now;
+  drag=gesture;
+  $('pulltitle').textContent='RELEASE TO LOCK POWER';
+  $('swingfeedback').textContent=gesture?'Pull farther for power · ease back to reduce':'Power builds while Space is held';
+  $('pad').classList.add('pulling');
+  setPower(gesture?0:.025);
+}
+function releaseMeter(now){
+  if(swingStage!=='power')return;
+  if(!drag)setPower(heldPower(now-meterStart));
+  if(power<.025){cancelMeter();return}
+  drag=null;
+  swingStage='accuracy';
+  $('pad').classList.add('centering');
+  meterStart=now;
+  $('pulltitle').textContent='WATCH THE MALLET';
+  $('swingfeedback').textContent='Tap as the mallet reaches the ball';
+  $('pad').style.setProperty('--drift','50%');
+}
+function finishMeter(now){
+  if(swingStage!=='accuracy')return;
+  lastTiming=accuracyPosition(now-meterStart);
+  const error=timingError(lastTiming);
+  resetMeter();
+  strike(angle+error,power,$('jump').getAttribute('aria-pressed')==='true',lastTiming);
+}
 function updateBallTargets(){const panel=$('placementtargets');panel.hidden=!placing;panel.replaceChildren();if(!placing||!match)return;const targets=nextBallTargets(match,balls);for(const entry of targets){const item=document.createElement('div'),dot=document.createElement('i'),name=document.createElement('b'),label=document.createElement('span');dot.className='target-ball-dot';dot.style.background=colors[entry.index];name.textContent=entry.name;label.textContent=entry.label;item.append(dot,name,label);item.className='ball-target-row';panel.append(item);}for(const [i,g]of hoopMeshes.entries()){const entries=targets.filter(e=>!e.finished&&e.target.h===i);if(!entries.length)continue;const group=document.createElement('span');group.className='wicket-ball-targets';for(const entry of entries){const tag=document.createElement('span');tag.className='wicket-ball-tag';tag.style.background=colors[entry.index];tag.style.color=entry.index===3?'#172b26':'#fff';tag.textContent=entry.name+(entry.target.d<0?' ↑':' ↓');group.append(tag)}g.userData.label.append(group);}}
 function updatePlacementUI(){updateBallTargets();const contact=match?.croquetTarget!==null&&match?.croquetTarget!==undefined&&human();document.body.classList.toggle('placing',placing);grounds.setShotView(placing?placementView==='close':view==='shotview');$('contactcontrols').hidden=!contact||phase!=='aim';$('contactangle').hidden=!placing;$('placeconfirm').hidden=!placing;$('placeedit').hidden=!contact||placing;$('placeconfirm').disabled=placing&&!croquetPositionValid();$('pad').setAttribute('aria-disabled',String(placing||phase!=='aim'||!human()));$('placementviews').hidden=!placing;$('placementorbit').hidden=!placing||placementView!=='close';for(const id of ['close','wide','overhead'])$('place'+id).setAttribute('aria-pressed',String(placementView===id));if(placing){$('shotheading').textContent='Place your ball';$('hint').textContent='Tap or drag around '+names[match.croquetTarget]+', or use the slider. Use Court or Overhead for context, then Close to position and confirm.';$('contactvalid').textContent=croquetPositionValid()?'Place '+current().name+' around '+names[match.croquetTarget]:'Blocked — choose another side';$('status').textContent='Place '+current().name+' · no stroke yet';}}
 function positionContact(a){if(!placing)return;match.placeCroquet(a);$('contactangle').value=a*180/Math.PI;guideAim();updateUI();}
@@ -91,7 +140,7 @@ function beginTurn(){if(phase==='over')return;placementView='close';placementYaw
   resetHoopProgress(b);
   notice(b.name+' plays from the penalty area.');
 }if(match?.chooseBall&&!human()){const choices=balls.map((b,i)=>({b,i})).filter(o=>o.b.side!==humanSide&&!o.b.finished);choices.sort((a,b)=>Math.hypot(a.b.x-match.target(a.i).x,a.b.z-match.target(a.i).z)-Math.hypot(b.b.x-match.target(b.i).x,b.b.z-match.target(b.i).z));if(choices[0]){match.selectBall(choices[0].i);turn=match.turn;b=current()}}if(!b.entered){const pos=match?match.startPosition():{x:13.35,z:16.85};b.x=pos.x;b.z=pos.z;b.entered=true}if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const o=balls[match.croquetTarget],t=match.target();const a=Math.atan2(o.x-t.x,o.z-t.z);$('contactangle').value=a*180/Math.PI;match.placeCroquet(a);if(!croquetPositionValid()){for(let k=0;k<72;k++){const alternative=a+k*Math.PI/36;match.placeCroquet(alternative);if(croquetPositionValid()){$('contactangle').value=((alternative*180/Math.PI+540)%360)-180;break}}}}placing=human()&&match?.croquetTarget!==null&&match?.croquetTarget!==undefined;guideAim();updateUI();if(!human())aiTimer=setTimeout(aiShot,1200)}
-function reset(){endMouseOrbit();clearTimeout(aiTimer);offsideRule=new OffsideRule();offsideQueue=[];$('offsidedialog').close();humanSide=0;humanBall=0;grounds.randomizeLawn();setCourse(variant);if(variant!=='golf')mode='ai';$('mode').value=mode;$('mode').hidden=variant!=='golf';$('players').hidden=variant==='golf';balls.forEach((b,i)=>b.side=i%2);turn=0;point=0;scores=[0,0];balls.forEach(b=>{b.x=13.35;b.z=16.85;b.vx=b.vz=b.vy=0;b.y=R;b.entered=false;b.finished=false;b.progress=0;delete b.aimAngle;delete b.offsidePenalty;resetHoopProgress(b)});match=variant==='golf'?null:new VariantMatch(variant,balls,Number($('players').value));document.body.classList.toggle('multiplayer',!!match?.individual);$('opponentlabel').textContent=match?.individual?'COMPUTERS':mode==='local'?'PLAYER 2':'COMPUTER';$('goaltext').textContent=variant==='golf'?'FIRST TO 7':match?.individual?'FIRST TO '+match.config.route.length:'BOTH BALLS HOME';$('footerlabel').textContent=VARIANTS[variant].short+' · 3D CLUB EDITION';$('ruleSummary').textContent=VARIANTS[variant].summary;$('ruleDetails').textContent=VARIANTS[variant].details;$('ruleLimit').textContent='Larger balls and wider hoops for touch play. '+VARIANTS[variant].limit;$('ruleLink').href=VARIANTS[variant].url;$('ruleLink').textContent=VARIANTS[variant].name+' · Official rules ↗';$('ballprogress').hidden=variant==='golf';$('contactcontrols').hidden=true;$('ballchoices').hidden=true;phase='aim';drag=null;spaceStart=0;$('history').textContent='Choosing colours and opening order…';prepareOpening()}
+function reset(){lastTiming=null;committedTiming=null;resetMeter();endMouseOrbit();clearTimeout(aiTimer);offsideRule=new OffsideRule();offsideQueue=[];$('offsidedialog').close();humanSide=0;humanBall=0;grounds.randomizeLawn();setCourse(variant);if(variant!=='golf')mode='ai';$('mode').value=mode;$('mode').hidden=variant!=='golf';$('players').hidden=variant==='golf';balls.forEach((b,i)=>b.side=i%2);turn=0;point=0;scores=[0,0];balls.forEach(b=>{b.x=13.35;b.z=16.85;b.vx=b.vz=b.vy=0;b.y=R;b.entered=false;b.finished=false;b.progress=0;delete b.aimAngle;delete b.offsidePenalty;resetHoopProgress(b)});match=variant==='golf'?null:new VariantMatch(variant,balls,Number($('players').value));document.body.classList.toggle('multiplayer',!!match?.individual);$('opponentlabel').textContent=match?.individual?'COMPUTERS':mode==='local'?'PLAYER 2':'COMPUTER';$('goaltext').textContent=variant==='golf'?'FIRST TO 7':match?.individual?'FIRST TO '+match.config.route.length:'BOTH BALLS HOME';$('footerlabel').textContent=VARIANTS[variant].short+' · 3D CLUB EDITION';$('ruleSummary').textContent=VARIANTS[variant].summary;$('ruleDetails').textContent=VARIANTS[variant].details;$('ruleLimit').textContent='Larger balls and wider hoops for touch play. '+VARIANTS[variant].limit;$('ruleLink').href=VARIANTS[variant].url;$('ruleLink').textContent=VARIANTS[variant].name+' · Official rules ↗';$('ballprogress').hidden=variant==='golf';$('contactcontrols').hidden=true;$('ballchoices').hidden=true;phase='aim';drag=null;spaceStart=0;$('history').textContent='Choosing colours and opening order…';prepareOpening()}
 function updateOwnership(){
  const owned=match?.individual?[humanBall]:[humanSide,humanSide+2];
  const first=document.querySelector('.scoreboard>div:first-child small');first.replaceChildren(document.createTextNode(mode==='local'?'PLAYER 1 ':'YOU '));
@@ -111,7 +160,9 @@ function prepareOpening(){phase='toss';placing=false;cancelMeter();updateUI();
  $('tossdialog').showModal();}
 for(const [id,choice]of [['tossfirst','first'],['tosssecond','second'],['tossblue','blue'],['tossred','red']])$(id).onclick=()=>{const result=openingChoice(variant,tossWon,choice),team=result.humanSide?'Red & Yellow':'Blue & Black';startOpening(result,'Coin toss: you play '+team+'.');};
 $('tossdialog').addEventListener('cancel',e=>e.preventDefault());
-function strike(a,p,jump=false){if(phase!=='aim'||placing||p<.025)return;if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined&&!croquetPositionValid()){notice('Rotate the contact position clear of obstacles.');return}endMouseOrbit();if(match)match.beginStroke();else offsideRule.begin(current());angle=a;setPower(p);phase='swing';swingStarted=performance.now();const b=current();shotAge=0;shotPullback=0;scoredThisStroke=false;balls.forEach(b=>{if(!match)beginHoopStroke(b,scoringHoop());b.grain=Math.random()*Math.PI*2;b.rollBias=(Math.random()-.5)*.026;const [tx,tz]=coords(target());b.startDist=Math.hypot(b.x-tx,b.z-tz)});updateUI();setTimeout(()=>{if(phase!=='swing')return;const uncertainty=shotUncertainty(p,!human(),difficulty,playerAccuracy),normal=Math.sqrt(-2*Math.log(Math.max(.0001,Math.random())))*Math.cos(2*Math.PI*Math.random()),actualAngle=a+normal*uncertainty.angleSD,speed=MAX*p*(1+(Math.random()*2-1)*uncertainty.speedSpread);const launch=launchVelocity(speed,jump);b.vx=Math.sin(actualAngle)*launch.horizontal;b.vz=Math.cos(actualAngle)*launch.horizontal;b.y=R;b.vy=launch.vertical;phase='moving';beep(150,.1);updateUI()},200)}
+function strike(a,p,jump=false,timing=null){if(phase!=='aim'||placing||p<.025)return;if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined&&!croquetPositionValid()){notice('Rotate the contact position clear of obstacles.');return}endMouseOrbit();if(match)match.beginStroke();else offsideRule.begin(current());const contactDelay=timing===null?200:Math.min(200,Math.max(0,timing)*ACCURACY_MS/2);
+committedTiming=timing===null?null:{position:timing,delay:contactDelay,angle};
+angle=a;setPower(p);phase='swing';swingStarted=performance.now();const b=current();shotAge=0;shotPullback=0;scoredThisStroke=false;balls.forEach(b=>{if(!match)beginHoopStroke(b,scoringHoop());b.grain=Math.random()*Math.PI*2;b.rollBias=(Math.random()-.5)*.026;const [tx,tz]=coords(target());b.startDist=Math.hypot(b.x-tx,b.z-tz)});updateUI();setTimeout(()=>{if(phase!=='swing')return;const uncertainty=shotUncertainty(p,!human(),difficulty,playerAccuracy),normal=Math.sqrt(-2*Math.log(Math.max(.0001,Math.random())))*Math.cos(2*Math.PI*Math.random()),actualAngle=a+normal*uncertainty.angleSD,speed=MAX*p*(1+(Math.random()*2-1)*uncertainty.speedSpread);const launch=launchVelocity(speed,jump);b.vx=Math.sin(actualAngle)*launch.horizontal;b.vz=Math.cos(actualAngle)*launch.horizontal;b.y=R;b.vy=launch.vertical;phase='moving';beep(150,.1);updateUI()},contactDelay)}
 function aiShot(){if($('controllerdialog').open||$('helpdialog').open){aiTimer=setTimeout(aiShot,250);return}if(phase!=='aim'||human())return;const t=target(),[x,z]=coords(t),state={balls:balls.map(b=>({x:b.x,z:b.z,entered:onCourt(b),finished:b.finished,side:b.side,hoopRun:b.hoopRun?{...b.hoopRun}:undefined})),striker:turn,hoop:{key:point,x,z},direction:t.d,posts,dead:match?[...match.dead]:[]};
  if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const choice=chooseCroquetShot({...state,contactTarget:match.croquetTarget});if(choice){match.placeCroquet(choice.contactAngle);$('contactangle').value=choice.contactAngle*180/Math.PI;guideAim();$('history').textContent='Computer takes croquet and sets up its next shot.';strike(choice.angle,choice.power);return}const o=balls[match.croquetTarget];strike(Math.atan2(o.x-current().x,o.z-current().z),.15);return}
  if(t.stake){const d=Math.hypot(x-current().x,z-current().z);strike(Math.atan2(x-current().x,z-current().z),Math.min(.95,Math.sqrt(2*F*(d+.7))/MAX));return}
@@ -273,15 +324,17 @@ function openControllerMenu(){if($('offsidedialog').open)return;if($('tossdialog
 function closeControllerMenu(){$('controllerdialog').close();controllerMenus.clear();}
 $('controlleropen').onclick=openControllerMenu;$('controllerclose').onclick=$('gpreturn').onclick=closeControllerMenu;$('gpvariant').onchange=controllerFieldState;
 function applyControllerSettings(forceNew=false){const nextVariant=$('gpvariant').value,nextPlayers=$('gpplayers').value,nextMode=nextVariant==='golf'?$('gpmode').value:'ai',restart=forceNew||variant!==nextVariant||mode!==nextMode||(nextVariant!=='golf'&&$('players').value!==nextPlayers);closeControllerMenu();playerAccuracy=$('gpaccuracy').value;
-shotHeight=$('gpshotheight').value;
+const nextHeight=$('gpshotheight').value;
+const heightChanged=nextHeight!==shotHeight;
+shotHeight=nextHeight;
 try {
   localStorage.setItem('croquet-player-accuracy',playerAccuracy);
   localStorage.setItem('croquet-shot-height',shotHeight);
 } catch {}
-$('difficulty').value=$('gpdifficulty').value;$('difficulty').onchange();$('setting').value=$('gpsetting').value;$('setting').onchange();if(restart){variant=nextVariant;mode=nextMode;$('variant').value=variant;$('players').value=nextPlayers;$('mode').value=mode;reset()}else updateUI();}
+$('difficulty').value=$('gpdifficulty').value;$('difficulty').onchange();$('setting').value=$('gpsetting').value;$('setting').onchange();if(restart){variant=nextVariant;mode=nextMode;$('variant').value=variant;$('players').value=nextPlayers;$('mode').value=mode;reset()}if(heightChanged&&!placing)$('shotview').click();else if(!restart)updateUI();}
 $('gpapply').onclick=()=>applyControllerSettings(false);$('gpnew').onclick=()=>applyControllerSettings(true);
 $('gphelp').onclick=()=>{closeControllerMenu();$('help').click()};$('gpfull').onclick=()=>$('fullscreen').click();
-function controllerHint(){if(!controllerConnected)return;const text=$('offsidedialog').open?'D-pad: choose penalty area · A: select':$('tossdialog').open||$('controllerdialog').open||$('helpdialog').open?'D-pad: move / change · A: select · B: back · right stick: scroll':placing?'LS: position ball · RS: look / zoom · A: confirm · LB/RB: views · Menu: settings':phase!=='aim'||!human()?'LB/RB: views · Menu: settings · View: Help':swingStage==='accuracy'?'Press A or RT at the centre mark · B cancels':swingStage==='power'?'Release A / RT to lock power · hold LT for finer power':match?.chooseBall?'LB / RB: choose your ball · LS: aim · A / RT: hold power':'LS: aim · LT: fine · A/RT: power → release → press at centre · X: jump · Menu: settings';if($('controllerhint').textContent!==text)$('controllerhint').textContent=text;}
+function controllerHint(){if(!controllerConnected)return;const text=$('offsidedialog').open?'D-pad: choose penalty area · A: select':$('tossdialog').open||$('controllerdialog').open||$('helpdialog').open?'D-pad: move / change · A: select · B: back · right stick: scroll':placing?'LS: position ball · RS: look / zoom · A: confirm · LB/RB: views · Menu: settings':phase!=='aim'||!human()?'LB/RB: views · Menu: settings · View: Help':swingStage==='accuracy'?'Press A or RT as the mallet reaches the ball · B cancels':swingStage==='power'?'Release A / RT to lock power · hold LT for finer power':match?.chooseBall?'LB / RB: choose your ball · LS: aim · A / RT: hold power':'LS: aim · LT: fine · A/RT: power → release → press at centre · X: jump · Menu: settings';if($('controllerhint').textContent!==text)$('controllerhint').textContent=text;}
 function controllerView(step){const list=placing?['close','wide','overhead']:['wide','shotview','overhead'],active=placing?placementView:view,id=list[(Math.max(0,list.indexOf(active))+step+list.length)%list.length];if(placing)setPlacementView(id);else $(id).click();}
 const controller=createGamepadDriver({
  getState:()=>({phase,human:human(),placing,swingStage,chooseBall:!!match?.chooseBall,modal:$('offsidedialog').open||$('tossdialog').open||$('controllerdialog').open||$('helpdialog').open}),
@@ -345,7 +398,27 @@ function frame(now){requestAnimationFrame(frame);animateFlags(now/1000);animateS
     shotPullback=Math.max(shotPullback,progress*progress*(3-2*progress));
   }
 accumulator+=dt;let n=0;while(accumulator>=1/240&&n++<16){physics(1/240);accumulator-=1/240}if(shotAge>.25&&balls.every(b=>Math.hypot(b.vx,b.vz)<.015&&!airborne(b))){balls.forEach(b=>{b.vx=b.vz=0});finishShot()}}
-balls.forEach(b=>{b.mesh.visible=onCourt(b);b.mesh.position.set(b.x,b.y??R,b.z);if(b.vx||b.vz){b.mesh.rotation.x+=b.vz*dt/R;b.mesh.rotation.z-=b.vx*dt/R}});activeRing.position.set(b.x,.03,b.z);activeRing.visible=phase==='aim';const dx=Math.sin(angle),dz=Math.cos(angle),rulerLength=distanceToBoundary(b,angle);line.visible=mallet.visible=!placing&&(phase==='aim'||phase==='swing');if(line.visible){const a=line.geometry.attributes.position;a.setXYZ(0,b.x,.07,b.z);a.setXYZ(1,b.x+dx*rulerLength,.07,b.z+dz*rulerLength);a.needsUpdate=true;line.geometry.computeBoundingSphere();line.computeLineDistances();const swing=phase==='swing'?Math.min(1,(now-swingStarted)/200):0;const forward=swingStage==='accuracy'?Math.min(1,1-accuracyPosition(now-meterStart)):0;const back=phase==='swing'&&human()?.55*(1-swing)+.51*swing:(.55+power*1.7)*(1-Math.max(swing,forward))+.51*Math.max(swing,forward);mallet.position.set(b.x-dx*back,0,b.z-dz*back);mallet.rotation.y=angle;}
+balls.forEach(b=>{b.mesh.visible=onCourt(b);b.mesh.position.set(b.x,b.y??R,b.z);if(b.vx||b.vz){b.mesh.rotation.x+=b.vz*dt/R;b.mesh.rotation.z-=b.vx*dt/R}});activeRing.position.set(b.x,.03,b.z);activeRing.visible=phase==='aim';activeRing.scale.setScalar(1);activeRing.material.color.setHex(0xfff6d8);const dx=Math.sin(angle),dz=Math.cos(angle),rulerLength=distanceToBoundary(b,angle);line.visible=mallet.visible=!placing&&(phase==='aim'||phase==='swing');if(line.visible){const a=line.geometry.attributes.position;a.setXYZ(0,b.x,.07,b.z);a.setXYZ(1,b.x+dx*rulerLength,.07,b.z+dz*rulerLength);a.needsUpdate=true;line.geometry.computeBoundingSphere();line.computeLineDistances();const pullback=.55+power*1.7;
+const timing=swingStage==='accuracy'?accuracyPosition(now-meterStart):null;
+let back=pullback;
+let malletAngle=angle;
+if(timing!==null){
+  back=MALLET_CONTACT+(timing<0?.55:pullback-MALLET_CONTACT)*timing;
+  // Briefly brighten the ball's ring as the mallet reaches contact.
+  const cue=Math.max(0,1-Math.abs(timing)/.16);
+  activeRing.scale.setScalar(1+cue*.48);
+  activeRing.material.color.setHex(cue>0?0xffd16c:0xfff6d8);
+}else if(phase==='swing'){
+  const duration=committedTiming?.delay??200;
+  const progress=duration?Math.min(1,(now-swingStarted)/duration):1;
+  const startBack=committedTiming
+    ? MALLET_CONTACT+(committedTiming.position<0?.55:pullback-MALLET_CONTACT)*committedTiming.position
+    : human()?.55:pullback;
+  back=committedTiming?.position<0?startBack:startBack+(MALLET_CONTACT-startBack)*progress;
+  malletAngle=committedTiming?.angle??angle;
+}
+mallet.position.set(b.x-Math.sin(malletAngle)*back,0,b.z-Math.cos(malletAngle)*back);
+mallet.rotation.y=malletAngle;}
 if(mouseOrbit||(!placing&&view==='shotview')){
   const classicHeight=shotDistance*6.5/9;
   const lowAmount=shotHeight==='low'?(phase==='moving'?1-shotPullback:1):0;
@@ -364,7 +437,9 @@ if(mouseOrbit||(!placing&&view==='shotview')){
   camGoal.set(b.x-sx*distance+sz*sideOffset,height,b.z-sz*distance-sx*sideOffset);
   lookGoal.set(b.x+sx*4,0,b.z+sz*4);
 }else if(placing&&placementView==='close'){const o=balls[match.croquetTarget];camGoal.set(o.x+Math.sin(placementYaw)*placementZoom*.55,placementZoom,o.z+Math.cos(placementYaw)*placementZoom*.55);lookGoal.set(o.x,0,o.z)}else if((placing?placementView:view)==='overhead'){camGoal.set(0,innerWidth<680?65:54,5);lookGoal.set(0,0,3)}else{const mobile=innerWidth<680;camGoal.set(mobile?31:36,mobile?58:49,mobile?63:52);lookGoal.set(mobile?0:-1,0,mobile?4:3)}if(mouseOrbit||!camInit){camera.position.copy(camGoal);look.copy(lookGoal);camInit=true}else{camera.position.lerp(camGoal,1-Math.exp(-dt*3));look.lerp(lookGoal,1-Math.exp(-dt*3))}if(camera.position.distanceTo(camGoal)<.001)camera.position.copy(camGoal);if(look.distanceTo(lookGoal)<.001)look.copy(lookGoal);camera.lookAt(look);updateYardRuler(b,dx,dz,rulerLength);hoopMeshes.forEach(g=>{const v=new THREE.Vector3(g.position.x,1.3,g.position.z).project(camera);const el=g.userData.label;el.style.left=(v.x*.5+.5)*renderWidth+'px';el.style.top=(-v.y*.5+.5)*renderHeight+'px';el.style.visibility=v.z>1?'hidden':'visible'});ring.material.opacity=.65+Math.sin(now*.002)*.2;drawMap();renderer.render(scene,camera)}
-initFullscreen($('fullscreen'),notice,resize);reset();requestAnimationFrame(frame);
+initFullscreen($('fullscreen'),notice,resize);reset();
+for(const id of ['wide','shotview','overhead'])$(id).classList.toggle('active',id===view);
+requestAnimationFrame(frame);
 // Small read-only state surface for verifying the simulation in a browser.
 window.croquet={getState:()=>({variant,strokes:match?.strokes,croquetTarget:match?.croquetTarget,turn:names[turn],point,scores:[...scores],phase,balls:balls.map(b=>({name:b.name,x:b.x,z:b.z,entered:b.entered,progress:b.progress,finished:b.finished})),target:target()})};
 
