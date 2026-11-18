@@ -1,15 +1,17 @@
+import {launchVelocity,airborne,advanceFlight,collideUpright,collideArch} from './flight.js';
 import {beginHoopStroke,trackHoopSegment,hoopWinner} from './scoring.js';
 // Choose between a reliable hoop attempt, a clearance, a block, and an approach.
 const R=.14,F=2.2,MAX=15;
 export const COMPUTER_LEVELS={amateur:{name:'Amateur',angle:3.4,speed:3.0},club:{name:'Country Club Champ',angle:1.85,speed:1.8},pro:{name:'Pro',angle:1,speed:1},master:{name:'Master',angle:.78,speed:.82}};
-export function shotUncertainty(power, computer=false, level='pro', playerAccuracy='amateur') {
+export function shotUncertainty(power, computer=false, level='pro', playerAccuracy='amateur', jump=false) {
   const skill = COMPUTER_LEVELS[level] || COMPUTER_LEVELS.pro;
   const baseAngle = .10 + 1.45 * power * power;
   const angleDegrees = computer ? baseAngle : playerAccuracy === 'pro'
     ? baseAngle + .035 + .45 * power * power : baseAngle;
   return {
-    angleSD: angleDegrees * Math.PI / 180 * (computer ? 1.25 * skill.angle : 1),
-    speedSpread: (.004 + .014 * power * power) * (computer ? 1.2 * skill.speed : 1)
+    angleSD: angleDegrees * Math.PI / 180 * (computer ? 1.25 * skill.angle : 1) * (jump ? 1.3 : 1),
+    speedSpread: (.004 + .014 * power * power) * (computer ? 1.2 * skill.speed : 1) * (jump ? 1.75 : 1),
+    loftSpread: jump ? Math.PI / 180 * 2.5 * (computer ? Math.sqrt(skill.angle) : 1) : 0
   };
 }
 function dot(a,b){return a.x*b.x+a.z*b.z}
@@ -56,3 +58,76 @@ export function chooseCroquetShot({balls,striker,contactTarget,hoop,direction,po
  }}return best;
 }
 
+
+
+// Try loft only when something is directly in the way and a ground shot is unreliable.
+export function chooseJumpShot({balls,striker,hoop,direction,posts,arches=[],level='pro'}, ground) {
+  const ball=balls[striker];
+  const range=distance(ball,hoop);
+  if((hoop.z-ball.z)*direction<=R||range>18||ground.reliability>=.8||ground.type==='roquet')return null;
+  const blockers=[...balls.filter((other,i)=>i!==striker&&other.entered)
+    .map(other=>({...other,r:R})),...posts];
+  const dx=hoop.x-ball.x,dz=hoop.z-ball.z;
+  const blocked=blockers.some(obstacle=>{
+    const along=((obstacle.x-ball.x)*dx+(obstacle.z-ball.z)*dz)/range;
+    return along>.27&&along<range&&segmentDistance(obstacle,ball,hoop)<R+obstacle.r;
+  });
+  if(!blocked)return null;
+
+  const angle=Math.atan2(dx,dz);
+  const samples=[[0,0,0],[-1,-.7,-1],[1,.7,-1],[-.6,.85,1],[.6,-.85,1]];
+  const groundWins=samples.filter(([error])=>{
+    const noisyAngle=ground.angle+error*shotUncertainty(ground.power,true,level).angleSD;
+    return simulate(balls,striker,noisyAngle,ground.power,posts,hoop,direction).scored===ball.side;
+  }).length;
+  if(groundWins>=4)return null;
+
+  let best=null;
+  const base=Math.sqrt(2*F*(range+.7))/MAX;
+  for(const factor of [.8,.9,1,1.1,1.2,1.32,1.46,1.6]){
+    const power=base*factor;
+    if(power>.98)continue;
+    const uncertainty=shotUncertainty(power,true,level,'amateur',true);
+    const wins=samples.filter(([aim,pace,loft])=>jumpRunsHoop(
+      {balls,striker,hoop,direction,posts,arches},
+      angle+aim*uncertainty.angleSD,power*(1+pace*uncertainty.speedSpread),loft*uncertainty.loftSpread
+    )).length;
+    if(wins>=3&&wins>=groundWins+2&&(!best||wins/5>best.reliability)){
+      best={angle,power,jump:true,type:'jump',reliability:wins/5};
+    }
+  }
+  return best;
+}
+
+function jumpRunsHoop({balls,striker,hoop,direction,posts,arches},angle,power,loft) {
+  const ball={...balls[striker],hoopRun:balls[striker].hoopRun?{...balls[striker].hoopRun}:undefined,y:R};
+  const obstacles=balls.filter((other,i)=>i!==striker&&other.entered);
+  const {horizontal,vertical}=launchVelocity(MAX*power,true,loft);
+  ball.vx=Math.sin(angle)*horizontal;
+  ball.vz=Math.cos(angle)*horizontal;
+  ball.vy=vertical;
+  const target={...hoop,key:hoop.key??0,direction};
+  beginHoopStroke(ball,target);
+  const dt=1/120;
+  for(let step=0;step<960;step++){
+    const previous={x:ball.x,y:ball.y,z:ball.z};
+    ball.x+=ball.vx*dt;
+    ball.z+=ball.vz*dt;
+    const flying=airborne(ball);
+    advanceFlight(ball,dt);
+    const speed=Math.hypot(ball.vx,ball.vz);
+    if(!flying&&speed){
+      const scale=Math.max(0,1-F*dt/speed);
+      ball.vx*=scale;
+      ball.vz*=scale;
+    }
+    for(const post of posts)collideUpright(ball,post);
+    for(const arch of arches)collideArch(ball,arch);
+    // A clean jump must leave the other balls untouched.
+    if(obstacles.some(other=>Math.hypot(ball.x-other.x,ball.y-R,ball.z-other.z)<2*R))return false;
+    if(Math.abs(ball.x)>14||Math.abs(ball.z)>17.5)return false;
+    trackHoopSegment(ball,previous,target);
+    if(speed<.015&&!airborne(ball))return !!ball.candidate;
+  }
+  return false;
+}

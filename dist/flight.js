@@ -1,6 +1,6 @@
 // Heights use ball-centre coordinates; one court unit is one yard.
 export const R=.14,GRAVITY=10.7;
-export function launchVelocity(speed,jump){const pitch=jump?Math.PI/6:0;return {horizontal:speed*Math.cos(pitch),vertical:speed*Math.sin(pitch)}}
+export function launchVelocity(speed,jump,loftOffset=0){const pitch=jump?Math.PI/6+loftOffset:0;return {horizontal:speed*Math.cos(pitch),vertical:speed*Math.sin(pitch)}}
 export function airborne(b){return (b.y??R)>R+.00001||Math.abs(b.vy||0)>.01}
 export function advanceFlight(b,dt){b.y??=R;b.vy??=0;if(!airborne(b))return false;b.y+=b.vy*dt-.5*GRAVITY*dt*dt;b.vy-=GRAVITY*dt;if(b.y<=R){b.y=R;if(b.vy<-.65){b.vy=-b.vy*.22;b.vx*=.86;b.vz*=.86}else b.vy=0;return true}return false}
 // Rounded upright/arc collision. Geometry matches the visible wicket tube.
@@ -8,3 +8,4 @@ function obstacle(b,x,y,z,r){const dx=b.x-x,dy=(b.y??R)-y,dz=b.z-z,d=Math.hypot(
 export function collideUpright(b,p){return obstacle(b,p.x,Math.max(0,Math.min(p.height??.57,b.y??R)),p.z,p.r)}
 export function collideArch(b,h){if(Math.abs(b.z-h.z)>R+.045||Math.abs(b.x-h.x)>.52||(b.y??R)<.38)return false;let nearest=null;for(let i=0;i<24;i++){const a=i*Math.PI/24,c=(i+1)*Math.PI/24;const ax=h.x+.33*Math.cos(a),ay=.57+.33*Math.sin(a),dx=.33*(Math.cos(c)-Math.cos(a)),dy=.33*(Math.sin(c)-Math.sin(a));const t=Math.max(0,Math.min(1,((b.x-ax)*dx+((b.y??R)-ay)*dy)/(dx*dx+dy*dy)));const x=ax+t*dx,y=ay+t*dy,d=Math.hypot(b.x-x,(b.y??R)-y);if(!nearest||d<nearest.d)nearest={x,y,d}}return obstacle(b,nearest.x,nearest.y,h.z,.045)}
 export function collideBalls(a,b){const dx=b.x-a.x,dy=(b.y??R)-(a.y??R),dz=b.z-a.z,d=Math.hypot(dx,dy,dz);if(d>=2*R||d<1e-8)return 0;const nx=dx/d,ny=dy/d,nz=dz/d,over=(2*R-d)/2;a.x-=nx*over;a.y=Math.max(R,(a.y??R)-ny*over);a.z-=nz*over;b.x+=nx*over;b.y=Math.max(R,(b.y??R)+ny*over);b.z+=nz*over;const rel=(a.vx-b.vx)*nx+((a.vy||0)-(b.vy||0))*ny+(a.vz-b.vz)*nz;if(rel>0){const imp=.94*rel;a.vx-=imp*nx;a.vy=(a.vy||0)-imp*ny;a.vz-=imp*nz;b.vx+=imp*nx;b.vy=(b.vy||0)+imp*ny;b.vz+=imp*nz}return Math.max(0,rel)}
+
