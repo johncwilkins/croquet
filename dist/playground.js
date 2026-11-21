@@ -77,7 +77,13 @@ export function createPlayground(){
   apartments(-10,-31,1,0,792);
   apartments(14,-33,2,0,951);
   apartments(43,-35,1,0,1269);
-  apartments(-28,-7,2,Math.PI/2,671);
+  apartments(-34,-13,2,Math.PI/2,671);
+  apartments(-35,20,2,Math.PI/2,1409);
+  apartments(52,-14,2,-Math.PI/2,1567);
+  apartments(51,19,2,-Math.PI/2,1673);
+  apartments(-19,40,2,Math.PI,1801);
+  apartments(14,42,2,Math.PI,1921);
+  apartments(40,43,1,Math.PI,2027);
 
   // Low tagged retaining walls and open fence frame the grass without hiding it.
   const wallMap=canvasMap(1536,128,(ctx,w,h)=>{

@@ -29,7 +29,12 @@ for(const x of [-14,14])box(.045,.025,35,white,x,.02,0);for(const z of [-17.5,17
 // Grounds: trimmed hedges, timber railings, trees and courtside seats.
 const garden=new THREE.Group();scene.add(garden);
 for(const x of [-21,21]){for(let z=-25;z<=25;z+=5){cyl(.1,1.4,wood,x+Math.sign(x)*2,.6,z,garden)}for(const y of [.5,1.1])box(.11,.12,52,wood,x+Math.sign(x)*2,y,0,garden)}
-createPlanting(garden);const animateSpectators=createSpectators(scene,!(renderer instanceof CanvasRenderer));
+createPlanting(garden);
+const clubCrowd=new THREE.Group();
+scene.add(clubCrowd);
+const spectatorMotion=!(renderer instanceof CanvasRenderer);
+let animateSpectators=createSpectators(clubCrowd,spectatorMotion);
+let neighborhoodCrowd, animateNeighborhood, animateClub=animateSpectators;
 for(const z of [-10,9]){box(1.2,.18,4,wood,-18,.85,z,garden);box(.15,1.2,4,wood,-18.55,1.2,z,garden);for(const dz of [-1.5,1.5]){box(.18,.8,.2,darkwood,-18,.4,z+dz,garden)}}
 const animateFlags=createFlags(scene);
 let variant='golf',match=null;const hoopPos=[],posts=[],hoopMeshes=[],stakeMeshes=[],seq=[];
@@ -354,7 +359,16 @@ function zoomPlacement(e){if(!placing)return;e.preventDefault();const delta=e.de
 renderer.domElement.addEventListener('wheel',zoomPlacement,{passive:false});
 for(const id of ['wide','shotview','overhead'])$(id).onclick=()=>{if(placing){setPlacementView(id==='shotview'?'close':id);return}view=id;grounds.setShotView(id==='shotview');shotCameraAngle=angle;updateUI();for(const v of ['wide','shotview','overhead'])$(v).classList.toggle('active',v===id)};$('route').onclick=()=>{showRoute=!showRoute;$('route').classList.toggle('active',showRoute);updateUI()};$('setting').onchange=()=>{const setting=$('setting').value;
 grounds.set(setting);
-garden.visible=setting!=='playground';
+const urban=setting==='playground';
+garden.visible=!urban;
+clubCrowd.visible=!urban;
+if(urban&&!neighborhoodCrowd){
+  neighborhoodCrowd=new THREE.Group();
+  scene.add(neighborhoodCrowd);
+  animateNeighborhood=createSpectators(neighborhoodCrowd,spectatorMotion,true);
+}
+if(neighborhoodCrowd)neighborhoodCrowd.visible=urban;
+animateSpectators=urban?animateNeighborhood:animateClub;
 $('northlandmark').textContent=setting==='playground'?'↟ NORTH APARTMENTS':'↟ NORTH PAVILION';
 $('courtname').textContent=grounds.settings[$('setting').value].title;notice(grounds.settings[$('setting').value].title)};$('variant').onchange=()=>{variant=$('variant').value;reset();notice('New game · '+VARIANTS[variant].name)};$('help').onclick=()=>{cancelMeter();$('helpdialog').showModal()};$('closehelp').onclick=$('start').onclick=()=>$('helpdialog').close();$('sound').onclick=()=>{sound=!sound;$('sound').textContent=sound?'Sound on':'Sound off';beep()};$('restart').onclick=()=>{if(confirm('Start a new game? Current scores will be cleared.'))reset()};$('players').onchange=()=>{mode='ai';reset();notice($('players').value+' players · drawing colours')};$('mode').onchange=()=>{mode=$('mode').value;$('opponentlabel').innerHTML=(mode==='ai'?'COMPUTER':'PLAYER 2')+' <i class="dot red"></i><i class="dot yellow"></i>';reset()};
 let controllerConnected=false;

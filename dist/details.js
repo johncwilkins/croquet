@@ -145,8 +145,17 @@ export function createPlanting(scene){const leaves=texture('leaf'),bark=material
  for(let i=0;i<28;i++){const x=(i%2?1:-1)*(28+rnd()*23),z=-48+rnd()*95,h=4.3+rnd()*3;const trunk=mesh(scene,new THREE.CylinderGeometry(.13,.32,h,10),bark,x,h/2,z);for(let j=0;j<5;j++){const a=j*2.4+rnd(),reach=1+rnd()*1.8,bx=x+Math.cos(a)*reach,bz=z+Math.sin(a)*reach,y=h*.7+rnd()*2;branch(x,h*.55,z,bx,y,bz,.09);crown(bx,y+1,bz,1.5+rnd(),1.6+rnd()*1.3,1.5+rnd(),.8+rnd()*.35)}crown(x,h+1.8,z,1.8,2.2,1.9)}
 }
 
-export function createSpectators(scene,animate=true){
+export function createSpectators(scene,animate=true,neighborhood=false){
  const cloth=texture('cloth','#e6e3d9'),whites=material(cloth,.94),trousers=material(texture('cloth','#d6d5cc'),.98),shoes=new THREE.MeshStandardMaterial({color:'#a49880',roughness:.8}),sole=new THREE.MeshStandardMaterial({color:'#5c5b50',roughness:1}),skins=['#bd8763','#e3b696','#8e6248','#cca384'];
+ const shirts=neighborhood?['#41576c','#975241','#53614b','#786348','#684d6d','#354453']
+   .map(color=>material(texture('cloth',color),.94)):[whites];
+ const pants=neighborhood?['#2d4054','#625744','#3e4140','#595966']
+   .map(color=>material(texture('cloth',color),.98)):[trousers];
+ const bottle=new THREE.MeshStandardMaterial({color:'#354924',roughness:.33});
+ const bottleLabel=new THREE.MeshStandardMaterial({color:'#bcaa7f',roughness:.9});
+ const can=new THREE.MeshStandardMaterial({color:'#985349',roughness:.42,metalness:.4});
+ const aluminum=new THREE.MeshStandardMaterial({color:'#a7a49a',roughness:.46,metalness:.5});
+ const paper=neighborhood?material(texture('cloth','#9c764a'),.96):null;
  const eyeWhite=new THREE.MeshStandardMaterial({color:'#c9c6b4',roughness:.6}),iris=new THREE.MeshStandardMaterial({color:'#414238',roughness:.6}),animations=[];
  function sphere(g,r,m,x,y,z,sx=1,sy=1,sz=1){const geo=new THREE.SphereGeometry(r,20,12);geo.type='SpectatorGeometry';const o=mesh(g,geo,m,x,y,z);o.scale.set(sx,sy,sz);if(r<.05)o.castShadow=false;return o}
  function limb(g,a,b,r,m,endScale=.8){const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),delta=end.clone().sub(start),o=mesh(g,new THREE.CylinderGeometry(r*endScale,r,delta.length(),12),m);o.position.copy(start.add(end).multiplyScalar(.5));o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());return o}
@@ -154,20 +163,33 @@ export function createSpectators(scene,animate=true){
  const positions=[[-17.8,-8,.7],[-18.5,-6.7,1.7],[-17.9,9,1.2],[-18.5,10.4,2.5],[18,-7,-1.4],[18.7,-5.6,-2.2],[17.8,7,-1.5],[18.4,8.5,-2.1],[-7,23,3],[-5.5,23.6,3.7],[6.5,23.1,2.9],[8,23.5,3.5]];
  positions.forEach(([x,z,heading],i)=>{const g=new THREE.Group();g.name='Spectator '+(i+1);g.userData.spectator=true;g.position.set(x,0,z);g.rotation.y=heading;g.scale.setScalar(.92+(i%4)*.045);scene.add(g);
  const skin=new THREE.MeshStandardMaterial({color:skins[i%skins.length],roughness:.78}),hair=new THREE.MeshStandardMaterial({color:['#4e4032','#a5a49a','#39352e','#b4a17c','#d3d0c4'][i%5],roughness:.97}),lip=new THREE.MeshStandardMaterial({color:i%2?'#966b5b':'#8a5c48',roughness:.9});
+ const shirt=shirts[i%shirts.length],pantsMaterial=pants[i%pants.length];
+ let drinkArm=null,drinkWrist=null,drinkElbow=null;
  const skirt=i%4===1,lean=(i%3-1)*.035;
  // Offset knees and weight-bearing hip create a relaxed, asymmetric stance.
  for(const side of [-1,1]){const hip=[side*.085,.92,0],knee=[side*.10+(side===1?lean:0),.52,side===1?.035:-.035],ankle=[side*.115,.13,side===1?.07:-.04];
- limb(g,hip,knee,.072,skirt?skin:trousers,.8);limb(g,knee,ankle,skirt?.045:.057,skirt?skin:trousers,.7);
+ limb(g,hip,knee,.072,skirt?skin:pantsMaterial,.8);limb(g,knee,ankle,skirt?.045:.057,skirt?skin:pantsMaterial,.7);
  sphere(g,.083,sole,ankle[0],.035,ankle[2]+.04,1,.28,1.6);sphere(g,.078,shoes,ankle[0],.07,ankle[2]+.04,1,.6,1.6);}
- if(skirt){const skirtGeo=new THREE.LatheGeometry([new THREE.Vector2(.23,.53),new THREE.Vector2(.215,.6),new THREE.Vector2(.17,.88),new THREE.Vector2(.145,.99)],24);mesh(g,skirtGeo,whites);}
+ if(skirt){const skirtGeo=new THREE.LatheGeometry([new THREE.Vector2(.23,.53),new THREE.Vector2(.215,.6),new THREE.Vector2(.17,.88),new THREE.Vector2(.145,.99)],24);mesh(g,skirtGeo,shirt);}
  const torso=new THREE.Group();torso.position.y=.94;torso.rotation.z=lean;g.add(torso);
- const profile=[new THREE.Vector2(.15,0),new THREE.Vector2(.155,.06),new THREE.Vector2(.14,.16),new THREE.Vector2(.19,.35),new THREE.Vector2(.20,.42),new THREE.Vector2(.08,.48)];const body=mesh(torso,new THREE.LatheGeometry(profile,24),whites);body.scale.z=.66;
+ const profile=[new THREE.Vector2(.15,0),new THREE.Vector2(.155,.06),new THREE.Vector2(.14,.16),new THREE.Vector2(.19,.35),new THREE.Vector2(.20,.42),new THREE.Vector2(.08,.48)];const body=mesh(torso,new THREE.LatheGeometry(profile,24),shirt);body.scale.z=.66;
  // Collar, button placket, belt and fabric creases give the clothes structure.
- for(const side of [-1,1]){const collar=mesh(torso,new THREE.BoxGeometry(.07,.11,.012),whites,side*.044,.445,.064);collar.rotation.z=side*.4;}
- const placket=mesh(torso,new THREE.BoxGeometry(.018,.24,.009),whites,0,.30,.127);for(const y of [.24,.31,.38])sphere(torso,.006,eyeWhite,0,y,.135);
+ for(const side of [-1,1]){const collar=mesh(torso,new THREE.BoxGeometry(.07,.11,.012),shirt,side*.044,.445,.064);collar.rotation.z=side*.4;}
+ const placket=mesh(torso,new THREE.BoxGeometry(.018,.24,.009),shirt,0,.30,.127);for(const y of [.24,.31,.38])sphere(torso,.006,eyeWhite,0,y,.135);
  if(!skirt)mesh(torso,new THREE.BoxGeometry(.29,.025,.18),new THREE.MeshStandardMaterial({color:'#aaa38c',roughness:.8}),0,.005,0);
  for(const side of [-1,1]){const shoulder=[side*.18,.41,0],elbow=side===1?[.29,.17,.06]:[-.27,.13,i%3===0?.12:0],wrist=side===1?[.25,.34,.25]:i%3===0?[-.34,.32,.19]:[-.22,.03,.10];
- limb(torso,shoulder,elbow,.067,whites,.82);sphere(torso,.055,whites,...elbow);limb(torso,elbow,wrist,.038,skin,.75);hand(torso,...wrist,skin);}
+ limb(torso,shoulder,elbow,.067,shirt,.82);sphere(torso,.055,shirt,...elbow);if(neighborhood&&side===1){
+   drinkArm=new THREE.Group();
+   drinkArm.position.set(...elbow);
+   torso.add(drinkArm);
+   drinkElbow=new THREE.Vector3(...elbow);
+   drinkWrist=new THREE.Vector3(...wrist).sub(drinkElbow);
+   limb(drinkArm,[0,0,0],drinkWrist.toArray(),.038,skin,.75);
+   hand(drinkArm,...drinkWrist.toArray(),skin);
+ }else{
+   limb(torso,elbow,wrist,.038,skin,.75);
+   hand(torso,...wrist,skin);
+ }}
  cylinder(torso,.047,.13,skin,0,.50,0,16);
  const head=new THREE.Group();head.position.set(0,.67,0);head.rotation.z=(i%3-1)*.07;head.rotation.y=(i%4-1.5)*.1;torso.add(head);
  sphere(head,.133,skin,0,0,0,.78,1.16,.88);sphere(head,.077,skin,0,-.074,.03,.9,.65,.85);
@@ -175,9 +197,56 @@ export function createSpectators(scene,animate=true){
  sphere(head,.027,skin,0,-.006,.116,.43,.9,.9);sphere(head,.023,lip,0,-.052,.10,1,.17,.25);
  const scalpGeo=new THREE.SphereGeometry(.135,20,12,0,Math.PI*2,0,1.55);scalpGeo.type='SpectatorGeometry';const scalp=mesh(head,scalpGeo,hair,0,.006,-.012);scalp.scale.set(.8,1.13,.89);
  if(skirt)sphere(head,.065,hair,0,.015,-.12,1,.9,.8);
- if(i%4===0){cylinder(head,.18,.014,whites,0,.151,0,24);cylinder(head,.115,.095,whites,0,.20,0,24);cylinder(head,.116,.015,new THREE.MeshStandardMaterial({color:'#7b7565',roughness:.9}),0,.168,0,24);}
+ if(i%4===0){cylinder(head,.18,.014,shirt,0,.151,0,24);cylinder(head,.115,.095,shirt,0,.20,0,24);cylinder(head,.116,.015,new THREE.MeshStandardMaterial({color:'#7b7565',roughness:.9}),0,.168,0,24);}
+ let drink=null, sipRotation=null;
+ if(neighborhood){
+   drink=new THREE.Group();
+   drink.position.copy(drinkWrist);
+   drinkArm.add(drink);
+   const kind=['Wine bottle','Beer can','Paper bag'][i%3];
+   drink.name=kind;
+   drink.userData.spectatorDrink=kind;
+   if(i%3===1){
+     cylinder(drink,.035,.116,can,0,.034,0,20);
+     cylinder(drink,.036,.007,aluminum,0,.094,0,20);
+     cylinder(drink,.036,.006,aluminum,0,-.027,0,20);
+     mesh(drink,new THREE.BoxGeometry(.018,.002,.010),bottleLabel,0,.099,.01);
+   }else{
+     mesh(drink,new THREE.LatheGeometry([
+       new THREE.Vector2(0,-.065),new THREE.Vector2(.036,-.063),new THREE.Vector2(.042,-.053),
+       new THREE.Vector2(.042,.075),new THREE.Vector2(.038,.093),new THREE.Vector2(.016,.122),
+       new THREE.Vector2(.014,.192),new THREE.Vector2(.018,.197),new THREE.Vector2(.018,.208)
+     ],16),bottle);
+     if(i%3===0){
+       cylinder(drink,.0425,.049,bottleLabel,0,.028,0,16);
+     }else{
+       const bag=new THREE.LatheGeometry([
+         new THREE.Vector2(.041,-.07),new THREE.Vector2(.054,-.053),
+         new THREE.Vector2(.052,.055),new THREE.Vector2(.037,.12),
+         new THREE.Vector2(.026,.146),new THREE.Vector2(.023,.158)
+       ],9);
+       mesh(drink,bag,paper).rotation.y=i*.72;
+     }
+   }
+   const towardMouth=new THREE.Vector3(.045,.53,.235).sub(drinkElbow).normalize();
+   sipRotation=new THREE.Quaternion().setFromUnitVectors(drinkWrist.clone().normalize(),towardMouth);
+ }else{
  const glass=new THREE.MeshStandardMaterial({color:'#e0ece8',transparent:true,opacity:.44,roughness:.08,metalness:.05});cylinder(torso,.006,.10,glass,.25,.42,.25,10);cylinder(torso,.04,.008,glass,.25,.375,.25,16);mesh(torso,new THREE.LatheGeometry([new THREE.Vector2(.008,0),new THREE.Vector2(.043,.026),new THREE.Vector2(.047,.075),new THREE.Vector2(.038,.12)],16),glass,.25,.46,.25);cylinder(torso,.037,.023,new THREE.MeshStandardMaterial({color:i%3?'#c6ac66':'#863f49',transparent:true,opacity:.8,roughness:.25}),.25,.50,.25,16);
- animations.push({head,torso,lean,phase:i*1.7,baseHead:head.rotation.y});
+ }
+ animations.push({head,torso,lean,phase:i*1.7,baseHead:head.rotation.y,drinkArm,drink,sipRotation});
  });
- return time=>{if(!animate)return;for(const {head,torso,lean,phase,baseHead}of animations){head.rotation.y=baseHead+Math.sin(time*.34+phase)*.045;head.rotation.x=Math.sin(time*.47+phase)*.016;torso.rotation.z=lean+Math.sin(time*.38+phase)*.006;}};
+ const restingArm=new THREE.Quaternion();
+ return time=>{
+   if(!animate)return;
+   for(const {head,torso,lean,phase,baseHead,drinkArm,drink,sipRotation} of animations){
+     const sip=drinkArm?Math.pow(Math.max(0,Math.cos(time*.58+phase)),18):0;
+     head.rotation.y=baseHead+Math.sin(time*.34+phase)*.045;
+     head.rotation.x=Math.sin(time*.47+phase)*.016-sip*.17;
+     torso.rotation.z=lean+Math.sin(time*.38+phase)*.006;
+     if(drinkArm){
+       drinkArm.quaternion.slerpQuaternions(restingArm,sipRotation,sip);
+       drink.rotation.x=-sip*.86;
+     }
+   }
+ };
 }
