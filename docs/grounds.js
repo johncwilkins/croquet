@@ -1,3 +1,4 @@
+import {createPlayground} from './playground.js';
 import * as THREE from './vendor/three.module.js';
 export function createGrounds(scene,renderer){
  let seed=81;const rand=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
@@ -23,7 +24,7 @@ export function createGrounds(scene,renderer){
  else shade=edge((v+Math.abs(u-14)*.8)/3);
  const light=(shade+1)/2,i=(y*size+x)*4;data[i]=29+164*light;data[i+1]=65+145*light;data[i+2]=33+99*light;data[i+3]=255;}
  c.putImageData(image,0,0);cutTexture.needsUpdate=true;renderer.lastKey='';return patterns[lastPattern]}
- const settings={english:{title:'English Cottage',sky:'#bfd1d4',fog:'#bfd1d4'},nantucket:{title:'Nantucket Village',sky:'#c5deeb',fog:'#c5deeb'},resort:{title:'Country Club Resort',sky:'#c6dce5',fog:'#c6dce5'}};
+ const settings={english:{title:'English Cottage',sky:'#bfd1d4',fog:'#bfd1d4'},nantucket:{title:'Nantucket Village',sky:'#c5deeb',fog:'#c5deeb'},resort:{title:'Country Club Resort',sky:'#c6dce5',fog:'#c6dce5'},playground:{title:'Playground',sky:'#bec9cc',fog:'#bec9cc'}};
  const groups={},buildings=[];
  function material(color,map=null){return new THREE.MeshStandardMaterial({color,map,roughness:.9})}
  function box(g,w,h,d,m,x,y,z){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;g.add(o);return o}
@@ -44,11 +45,24 @@ export function createGrounds(scene,renderer){
  box(pavilion,1.1,1.15,1.1,trim,0,6.05,0);roofGable(pavilion,1.5,1.5,6.63,7.25,slate);
  const clockCanvas=document.createElement('canvas');clockCanvas.width=clockCanvas.height=128;const clock=clockCanvas.getContext('2d');clock.fillStyle='#f2ead4';clock.fillRect(0,0,128,128);clock.strokeStyle='#254c60';clock.lineWidth=6;clock.beginPath();clock.arc(64,64,49,0,Math.PI*2);clock.stroke();clock.beginPath();clock.moveTo(64,31);clock.lineTo(64,64);clock.lineTo(89,77);clock.stroke();const clockTexture=new THREE.CanvasTexture(clockCanvas);clockTexture.colorSpace=THREE.SRGBColorSpace;box(pavilion,.9,.9,.03,material('#ffffff',clockTexture),0,6.08,.57);
  const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=96;const sign=signCanvas.getContext('2d');sign.fillStyle='#254c60';sign.fillRect(0,0,512,96);sign.fillStyle='#f2ead4';sign.textAlign='center';sign.font='bold 34px Georgia';sign.fillText('NORTH PAVILION',256,61);const signTexture=new THREE.CanvasTexture(signCanvas);signTexture.colorSpace=THREE.SRGBColorSpace;box(pavilion,5.1,.75,.08,material('#ffffff',signTexture),0,3.75,2.35);
- for(const name of Object.keys(settings)){const g=new THREE.Group();g.name=name;groups[name]=g;scene.add(g);g.visible=false;
+ for(const name of Object.keys(settings).filter(name=>name!=='playground')){const g=new THREE.Group();g.name=name;groups[name]=g;scene.add(g);g.visible=false;
  if(name==='english'){cottage(g,-11,-31,.08,'english',1.2);cottage(g,1,-33,-.12,'english',1.05);cottage(g,13,-31,-.16,'english',1.15);cottage(g,-29,-7,Math.PI/2,'english',1.1);box(g,39,.1,2.5,material('#b7ad94'),0,-.02,-23.5);for(const x of [-15,-4,8,17])flowers(g,x,-25,'#ad8ca6')}
  if(name==='nantucket'){for(let i=0;i<4;i++)cottage(g,-17+i*11,-33,(i-1.5)*-.04,'nantucket',1.05);cottage(g,-29,-8,Math.PI/2,'nantucket',1.2);box(g,43,.1,3,material('#c5bea8'),0,-.02,-24);for(let x=-20;x<23;x+=1){box(g,.11,.9,.11,trim,x,.45,-25.9)}for(const y of [.25,.7])box(g,43,.07,.08,trim,0,y,-25.9);for(const x of [-14,-6,7,17])flowers(g,x,-24.4,'#a5b3d0')}
  if(name==='resort'){const club=new THREE.Group();buildings.push(club);club.position.set(0,0,-34);g.add(club);box(club,26,5,8,material('#eee2c8'),0,2.5,0);roofGable(club,27,9,5.05,8,roof);box(club,29,.22,3,trim,0,3.9,5);for(let x=-13;x<=13;x+=3.25)cylinder(club,.13,3.9,trim,x,1.95,6);for(let x=-11;x<=11;x+=3.6)window(club,x,2.1,4.04,1.4,2);box(club,2,3,.15,timber,0,1.5,4.15);box(g,38,.1,4,material('#c8bba4'),0,0,-24);for(const x of [-17,17]){cylinder(g,.07,3.2,trim,x,1.6,-23);const shade=new THREE.Mesh(new THREE.ConeGeometry(2.2,.65,20),material('#efe8d3'));shade.position.set(x,3.2,-23);shade.castShadow=true;g.add(shade);box(g,1.6,.12,1.6,timber,x,1.1,-23)}for(const x of [-11,11])flowers(g,x,-25,'#e9e0c9')}
  }
- return {settings,randomizeLawn,setShotView(active){for(const building of buildings)building.visible=!active;renderer.lastKey='';},set(name){if(!settings[name])return;Object.entries(groups).forEach(([key,g])=>g.visible=key===name);scene.background=new THREE.Color(settings[name].sky);scene.fog.color.set(settings[name].fog);renderer.lastKey='';},grass};
+ let setting='english',shotView=false;
+ function updateBuildings(){
+   for(const building of buildings)building.visible=!shotView;
+   pavilion.visible=!shotView&&setting!=='playground';
+ }
+ return {settings,randomizeLawn,setShotView(active){shotView=active;updateBuildings();renderer.lastKey='';},set(name){
+   if(!settings[name])return;
+   if(name==='playground'&&!groups.playground){
+     groups.playground=createPlayground();
+     scene.add(groups.playground);
+   }
+   setting=name;
+   updateBuildings();
+   Object.entries(groups).forEach(([key,g])=>g.visible=key===name);scene.background=new THREE.Color(settings[name].sky);scene.fog.color.set(settings[name].fog);renderer.lastKey='';},grass};
 }
 
