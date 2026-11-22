@@ -21,3 +21,18 @@ const tooClose={...jumpState,balls:[jumpState.balls[0],{...jumpState.balls[1],z:
 assert.equal(chooseJumpShot(tooClose,chooseShot(tooClose)),null,'computer avoids jumping into a ball too close to clear');
 const rollModel=shotUncertainty(.5),jumpModel=shotUncertainty(.5,false,'pro','amateur',true);
 assert(jumpModel.angleSD>rollModel.angleSD && jumpModel.speedSpread>rollModel.speedSpread && jumpModel.loftSpread>0);
+
+const awkwardHoop={
+  ...breakState, direction:-1, level:'master', posts,
+  balls:[
+    {x:0,z:-2,entered:true,side:0},
+    {x:0,z:11,entered:true,side:1},
+    {x:2,z:-2,entered:true,side:0},
+    {x:10,z:10,entered:true,side:1}
+  ]
+};
+const distantBalls={...awkwardHoop,balls:awkwardHoop.balls.map((ball,i)=>i===2?{...ball,entered:false}:ball)};
+assert.equal(chooseBreakShot(distantBalls).type,'approach','set up from the wrong side of the wicket instead of chasing a distant ball');
+assert.equal(chooseBreakShot({...awkwardHoop,dead:[3]}).type,'approach','after a roquet, set up rather than chasing another nearby ball');
+assert.equal(chooseBreakShot({...awkwardHoop,balls:awkwardHoop.balls.map((ball,i)=>i===0?{...ball,z:2}:ball)}).type,'hoop');
+console.log('PASS: Association prioritizes a makeable hoop and avoids chains of setup roquets');
