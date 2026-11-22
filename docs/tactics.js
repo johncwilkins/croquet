@@ -37,7 +37,30 @@ export function associationRollUncertainty(power,level){
  return {...model,angleSD:model.angleSD*(1+.6*power),speedSpread:model.speedSpread*1.25};
 }
 
-export function chooseBreakShot({balls,striker,hoop,direction,posts,dead=[],level='pro'}){
+function cleanHoopPosition(ball,hoop,direction,balls,posts){
+ const depth=(hoop.z-ball.z)*direction;
+ if(depth<.3||depth>3.3||Math.abs(ball.x-hoop.x)>depth*.42)return false;
+ return !balls.some(other=>other!==ball&&other.entered&&segmentDistance(other,ball,hoop)<2*R)
+   && !posts.some(post=>segmentDistance(post,ball,hoop)<R+post.r);
+}
+
+function leaveRisk(striker,balls,posts,targets){
+ const own=balls[striker];
+ let risk=0;
+ for(const [i,other] of balls.entries()){
+   if(!other.entered||other.side===own.side)continue;
+   const gap=distance(other,own);
+   if(!posts.some(post=>segmentDistance(post,other,own)<R+post.r)){
+     risk=Math.max(risk,Math.exp(-gap/4));
+   }
+   const target=targets[i];
+   if(target&&!target.stake&&cleanHoopPosition(other,target,target.d,balls,posts))risk=Math.max(risk,.7);
+ }
+ return risk;
+}
+
+export function chooseBreakShot(state){
+ const {balls,striker,hoop,direction,posts,dead=[],level='pro',targets=[]}=state;
  const used=new Set(dead),b=balls[striker];
  const live=balls.map((o,i)=>({o,i})).filter(({o,i})=>i!==striker&&o.entered&&!o.finished&&!used.has(i));
  const liveIndices=new Set(live.map(({i})=>i));
@@ -55,8 +78,8 @@ export function chooseBreakShot({balls,striker,hoop,direction,posts,dead=[],leve
    for(const extra of [.45,1.4,3])add(o.x,o.z,range+extra,'roquet',i);
  }
  const setup={x:hoop.x,z:hoop.z-direction*1.4};
- for(const back of [1.3,2.5]){
-   const point={x:hoop.x,z:hoop.z-direction*back};
+ for(const back of [1.3,2.5])for(const side of [0,-.45,.45]){
+   const point={x:hoop.x+side,z:hoop.z-direction*back};
    add(point.x,point.z,distance(b,point),'approach');
  }
  const samples=[[0,0],[-.7,-.7],[.7,.7],[-1.5,.5],[1.5,-.5]];
@@ -64,7 +87,7 @@ export function chooseBreakShot({balls,striker,hoop,direction,posts,dead=[],leve
  for(const candidate of candidates){
    const {angle,power}=candidate;
    const {angleSD,speedSpread}=associationRollUncertainty(power,level);
-   let total=0,hoops=0,goodSetups=0;
+   let total=0,hoops=0,goodSetups=0,followUp=null,followUpHits=0;
    for(const [directionError,paceError] of samples){
      const result=simulate(balls,striker,angle+directionError*angleSD,
        power*(1+paceError*speedSpread),posts,hoop,direction);
@@ -73,24 +96,31 @@ export function chooseBreakShot({balls,striker,hoop,direction,posts,dead=[],leve
      const scores=pos.candidate&&hit===null;
      if(scores)hoops++;
      const setupDistance=distance(pos,setup);
-     const linedUp=hit===null&&setupDistance<1.15&&
-       !result.balls.some((other,i)=>i!==striker&&other.entered&&
-         segmentDistance(other,pos,hoop)<2*R);
+     const linedUp=hit===null&&cleanHoopPosition(pos,hoop,direction,result.balls,posts);
      if(linedUp)goodSetups++;
      total+=(scores?1200:0)+(linedUp?155:0)+
        threat(pos,hoop,direction,result.balls)*110-setupDistance*6;
+     if(!scores)total-=105*leaveRisk(striker,result.balls,posts,targets);
      if(liveIndices.has(hit)){
        const range=distance(b,balls[hit]);
-       // A nearby roquet can build a break. A speculative long one is worth less
-       // when the striker is already in position at the wicket.
-       const shortShotValue=(used.size===0?420:32)+threat(result.balls[hit],hoop,direction,result.balls)*30;
-       total+=shortShotValue*Math.exp(-Math.max(0,range-4)/(wicketDistance<4?3.5:6));
-     }else if(hit!==null&&!scores){
-       total-=180;
-     }
+       if(directionError===0&&range<=8){
+         followUp=chooseCroquetShot({...state,balls:result.balls,contactTarget:hit,lookAhead:true});
+         if(!followUp?.useful)followUp=null;
+         else followUp={...followUp,target:hit};
+       }
+       if(followUp?.target===hit){
+         followUpHits++;
+         const payoff=followUp.hoopChance*400+followUp.pioneerChance*105;
+         total+=payoff*Math.exp(-Math.max(0,range-3)/3.5)*(used.size?.42:1);
+       }else total-=145;
+     }else if(hit!==null&&!scores)total-=180;
    }
    const value=total/samples.length;
-   const plan={...candidate,value,reliability:hoops/samples.length};
+   if(followUp&&followUpHits<3)continue;
+   const plan=followUp
+     ? {...candidate,type:'roquet',target:followUp.target,value,reliability:hoops/samples.length}
+     : {...candidate,value,reliability:hoops/samples.length};
+   if(candidate.type==='roquet'&&!followUp)continue;
    if(!best||value>best.value)best=plan;
    if(goodSetups>=3&&candidate.type==='approach'&&(!bestSetup||value>bestSetup.value))bestSetup=plan;
    if(wicketDistance<=4&&candidate.type==='hoop'&&hoops>=3&&(!bestCloseHoop||value>bestCloseHoop.value)){
@@ -105,20 +135,62 @@ export function chooseBreakShot({balls,striker,hoop,direction,posts,dead=[],leve
  return best;
 }
 
-export function chooseCroquetShot({balls,striker,contactTarget,hoop,direction,posts,dead=[]}){
- const other=balls[contactTarget],used=new Set(dead);let best=null;
- for(let k=0;k<16;k++){const contactAngle=k*Math.PI/8,x=other.x+Math.sin(contactAngle)*.28001,z=other.z+Math.cos(contactAngle)*.28001;
- if(Math.abs(x)>=14||Math.abs(z)>=17.5||posts.some(p=>Math.hypot(x-p.x,z-p.z)<R+p.r)||balls.some((o,i)=>i!==striker&&i!==contactTarget&&o.entered&&!o.finished&&Math.hypot(x-o.x,z-o.z)<R*2))continue;
- const setup=balls.map((o,i)=>i===striker?{...o,x,z}:o),toward=Math.atan2(other.x-x,other.z-z);
- for(const offset of [-.65,-.3,0,.3,.65])for(const power of [.16,.26,.4,.55]){const angle=toward+offset,result=simulate(setup,striker,angle,power,posts,hoop,direction),pos=result.balls[striker],sent=result.balls[contactTarget];
- if(distance(sent,other)<.02||Math.abs(sent.x)>13.9||Math.abs(sent.z)>17.4||Math.abs(pos.x)>13.9||Math.abs(pos.z)>17.4)continue;
- const approach=distance(pos,{x:hoop.x,z:hoop.z-direction*1.4}),nextRoquet=result.balls.reduce((v,o,i)=>i!==striker&&i!==contactTarget&&o.entered&&!o.finished&&!used.has(i)?Math.max(v,Math.exp(-distance(pos,o)/5)):v,0);
- const value=(pos.candidate?1200:0)+threat(pos,hoop,direction,result.balls)*220-approach*9+nextRoquet*80;
- if(!best||value>best.value)best={angle,power,contactAngle,type:'croquet',value};
- }}return best;
+export function chooseCroquetShot({
+ balls,striker,contactTarget,hoop,direction,posts,nextHoop,targets=[],level='pro',lookAhead=false
+}){
+ const other=balls[contactTarget];
+ const candidates=[];
+ function outcome(setup,angle,power){
+   const result=simulate(setup,striker,angle,power,posts,hoop,direction);
+   const pos=result.balls[striker],sent=result.balls[contactTarget];
+   if(distance(sent,other)<.02||Math.abs(sent.x)>13.9||Math.abs(sent.z)>17.4||
+      Math.abs(pos.x)>13.9||Math.abs(pos.z)>17.4)return null;
+   const ready=!!pos.candidate||cleanHoopPosition(pos,hoop,direction,result.balls,posts);
+   const pioneer=!!nextHoop&&!nextHoop.stake&&distance(sent,nextHoop)<4&&
+     (nextHoop.z-sent.z)*nextHoop.d>.2;
+   const approach=distance(pos,{x:hoop.x,z:hoop.z-direction*1.4});
+   const value=(pos.candidate?1200:0)+(ready?350:0)+(ready&&pioneer?95:0)
+     +threat(pos,hoop,direction,result.balls)*110-approach*16
+     -80*leaveRisk(striker,result.balls,posts,targets);
+   return {ready,pioneer,value};
+ }
+ const steps=lookAhead?12:16;
+ for(let k=0;k<steps;k++){
+   const contactAngle=k*2*Math.PI/steps;
+   const x=other.x+Math.sin(contactAngle)*.28001,z=other.z+Math.cos(contactAngle)*.28001;
+   if(Math.abs(x)>=14||Math.abs(z)>=17.5||posts.some(p=>Math.hypot(x-p.x,z-p.z)<R+p.r)||
+     balls.some((o,i)=>i!==striker&&i!==contactTarget&&o.entered&&!o.finished&&Math.hypot(x-o.x,z-o.z)<2*R))continue;
+   const setup=balls.map((o,i)=>i===striker?{...o,x,z}:o);
+   const toward=contactAngle+Math.PI;
+   const offsets=lookAhead?[-.45,0,.45]:[-.65,-.3,0,.3,.65];
+   for(const offset of offsets)for(const power of [.12,.16,.26,.4,.55]){
+     const angle=toward+offset;
+     const predicted=outcome(setup,angle,power);
+     if(predicted)candidates.push({angle,power,contactAngle,type:'croquet',setup,predicted});
+   }
+ }
+ candidates.sort((a,b)=>b.predicted.value-a.predicted.value);
+ let best=null;
+ for(const {setup,predicted,...candidate} of candidates.slice(0,lookAhead?3:10)){
+   const {angle,power}=candidate;
+   const model=shotUncertainty(power,true,level);
+   let valid=1,hoops=Number(predicted.ready),pioneers=Number(predicted.ready&&predicted.pioneer);
+   let total=predicted.value;
+   for(const side of [-1,1]){
+     const result=outcome(setup,angle+side*model.angleSD,
+       power*(1+side*.8*model.speedSpread));
+     if(!result){total-=600;continue}
+     valid++;
+     if(result.ready)hoops++;
+     if(result.ready&&result.pioneer)pioneers++;
+     total+=result.value;
+   }
+   const plan={...candidate,value:total/3,useful:valid===3&&hoops>=2,
+     hoopChance:hoops/3,pioneerChance:pioneers/3};
+   if(!best||plan.value>best.value)best=plan;
+ }
+ return best;
 }
-
-
 
 // Try loft only when something is directly in the way and a ground shot is unreliable.
 export function chooseJumpShot({balls,striker,hoop,direction,posts,arches=[],level='pro'}, ground) {

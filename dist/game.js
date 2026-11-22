@@ -205,8 +205,14 @@ const normal=Math.sqrt(-2*Math.log(Math.max(.0001,Math.random())))*Math.cos(2*Ma
   ? (Math.random()*2-1)*uncertainty.loftSpread-Math.max(0,Math.abs(timing??0)-.055)*.11
   : 0;
 const launch=launchVelocity(speed,jump,loftOffset);b.vx=Math.sin(actualAngle)*launch.horizontal;b.vz=Math.cos(actualAngle)*launch.horizontal;b.y=R;b.vy=launch.vertical;phase='moving';beep(150,.1);updateUI()},contactDelay)}
-function aiShot(){if($('controllerdialog').open||$('helpdialog').open){aiTimer=setTimeout(aiShot,250);return}if(phase!=='aim'||human())return;const t=target(),[x,z]=coords(t),state={balls:balls.map(b=>({x:b.x,z:b.z,entered:onCourt(b),finished:b.finished,side:b.side,hoopRun:b.hoopRun?{...b.hoopRun}:undefined})),striker:turn,hoop:{key:point,x,z},direction:t.d,posts,dead:match?[...match.dead]:[]};
- if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const choice=chooseCroquetShot({...state,contactTarget:match.croquetTarget});if(choice){match.placeCroquet(choice.contactAngle);$('contactangle').value=choice.contactAngle*180/Math.PI;guideAim();$('history').textContent='Computer takes croquet and sets up its next shot.';strike(choice.angle,choice.power);return}const o=balls[match.croquetTarget];strike(Math.atan2(o.x-current().x,o.z-current().z),.15);return}
+function aiShot(){if($('controllerdialog').open||$('helpdialog').open){aiTimer=setTimeout(aiShot,250);return}if(phase!=='aim'||human())return;const t=target(),[x,z]=coords(t);
+ const associationPlan=variant==='association'?{
+   nextHoop:match.target(turn,balls[turn].progress+1),
+   targets:balls.map((_,i)=>match.target(i)),
+   level:difficulty
+ }:{};
+ const state={balls:balls.map(b=>({x:b.x,z:b.z,entered:onCourt(b),finished:b.finished,side:b.side,hoopRun:b.hoopRun?{...b.hoopRun}:undefined})),striker:turn,hoop:{key:point,x,z},direction:t.d,posts,dead:match?[...match.dead]:[],...associationPlan};
+ if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const choice=chooseCroquetShot({...state,contactTarget:match.croquetTarget});if(choice){match.placeCroquet(choice.contactAngle);$('contactangle').value=choice.contactAngle*180/Math.PI;guideAim();$('history').textContent=choice.pioneerChance>=2/3?'Computer takes croquet and sets a ball near the following hoop.':'Computer takes croquet and lines up for the hoop.';strike(choice.angle,choice.power);return}const o=balls[match.croquetTarget];strike(Math.atan2(o.x-current().x,o.z-current().z),.15);return}
  if(t.stake){const d=Math.hypot(x-current().x,z-current().z);strike(Math.atan2(x-current().x,z-current().z),Math.min(.95,Math.sqrt(2*F*(d+.7))/MAX));return}
  const ground=variant==='association'?chooseBreakShot({...state,level:difficulty}):chooseShot(state);
  const jump=chooseJumpShot({...state,level:difficulty,arches:hoopPos.map(([x,z])=>({x,z}))},ground);
