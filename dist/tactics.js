@@ -31,20 +31,80 @@ let best=null;for(const c of candidates){const error=shotUncertainty(c.power).an
 const reliability=success/5;let value=total/5;if(c.type==='hoop'&&success===0)value-=70;if(c.type==='clearance'&&hits===0)value-=70;if(c.type==='block'&&baseline<.1)value-=15;if(!best||value>best.value)best={...c,value,reliability}}
 return best||{angle:Math.atan2(hoop.x-b.x,hoop.z-direction*2-b.z),power:.3,type:'approach',reliability:0}}
 
-// Association values a continuing break, not just disruption of opponents.
-export function chooseBreakShot({balls,striker,hoop,direction,posts,dead=[]}){
- const used=new Set(dead),b=balls[striker],live=balls.map((o,i)=>({o,i})).filter(({o,i})=>i!==striker&&o.entered&&!o.finished&&!used.has(i));
- const base=chooseShot({balls,striker,hoop,direction,posts}),candidates=[base];
- const add=(x,z,roll,type)=>candidates.push({angle:Math.atan2(x-b.x,z-b.z),power:Math.min(.95,Math.sqrt(2*F*roll)/MAX),type});
- if((hoop.z-b.z)*direction>R)for(const extra of [.4,1,1.7])add(hoop.x,hoop.z,distance(b,hoop)+extra,'hoop');
- for(const {o,i}of live)for(const extra of [.45,1.4,3]){const d=distance(b,o);add(o.x,o.z,d+extra,'roquet');candidates[candidates.length-1].target=i}
- for(const back of [1.3,2.5])add(hoop.x,hoop.z-direction*back,distance(b,{x:hoop.x,z:hoop.z-direction*back}),'approach');
- let best=null;for(const c of candidates){let value=0;for(const drift of [-1,0,1]){const result=simulate(balls,striker,c.angle+drift*shotUncertainty(c.power).angleSD,c.power,posts,hoop,direction),pos=result.balls[striker];const liveHit=result.firstHit!==null&&live.some(t=>t.i===result.firstHit);const scores=pos.candidate&&result.firstHit===null;
- value+=(scores?1200:0)+(liveHit?420+threat(result.balls[result.firstHit],hoop,direction,result.balls)*90:0)+threat(pos,hoop,direction,result.balls)*110-distance(pos,{x:hoop.x,z:hoop.z-direction*1.4})*3;
- if(result.firstHit!==null&&!liveHit&&!scores)value-=180;
- }value/=3;if(!best||value>best.value)best={...c,value}}
+// Longer Association strokes are harder to place, even on the highest level.
+export function associationRollUncertainty(power,level){
+ const model=shotUncertainty(power,true,level);
+ return {...model,angleSD:model.angleSD*(1+.6*power),speedSpread:model.speedSpread*1.25};
+}
+
+export function chooseBreakShot({balls,striker,hoop,direction,posts,dead=[],level='pro'}){
+ const used=new Set(dead),b=balls[striker];
+ const live=balls.map((o,i)=>({o,i})).filter(({o,i})=>i!==striker&&o.entered&&!o.finished&&!used.has(i));
+ const liveIndices=new Set(live.map(({i})=>i));
+ const wicketDistance=distance(b,hoop);
+ const base=chooseShot({balls,striker,hoop,direction,posts});
+ const candidates=[base];
+ const add=(x,z,roll,type,target)=>candidates.push({
+   angle:Math.atan2(x-b.x,z-b.z),power:Math.min(.95,Math.sqrt(2*F*roll)/MAX),type,target
+ });
+ if((hoop.z-b.z)*direction>R){
+   for(const extra of [.4,1,1.7])add(hoop.x,hoop.z,wicketDistance+extra,'hoop');
+ }
+ for(const {o,i} of live){
+   const range=distance(b,o);
+   for(const extra of [.45,1.4,3])add(o.x,o.z,range+extra,'roquet',i);
+ }
+ const setup={x:hoop.x,z:hoop.z-direction*1.4};
+ for(const back of [1.3,2.5]){
+   const point={x:hoop.x,z:hoop.z-direction*back};
+   add(point.x,point.z,distance(b,point),'approach');
+ }
+ const samples=[[0,0],[-.7,-.7],[.7,.7],[-1.5,.5],[1.5,-.5]];
+ let best=null,bestCloseHoop=null,bestSetup=null;
+ for(const candidate of candidates){
+   const {angle,power}=candidate;
+   const {angleSD,speedSpread}=associationRollUncertainty(power,level);
+   let total=0,hoops=0,goodSetups=0;
+   for(const [directionError,paceError] of samples){
+     const result=simulate(balls,striker,angle+directionError*angleSD,
+       power*(1+paceError*speedSpread),posts,hoop,direction);
+     const pos=result.balls[striker];
+     const hit=result.firstHit;
+     const scores=pos.candidate&&hit===null;
+     if(scores)hoops++;
+     const setupDistance=distance(pos,setup);
+     const linedUp=hit===null&&setupDistance<1.15&&
+       !result.balls.some((other,i)=>i!==striker&&other.entered&&
+         segmentDistance(other,pos,hoop)<2*R);
+     if(linedUp)goodSetups++;
+     total+=(scores?1200:0)+(linedUp?155:0)+
+       threat(pos,hoop,direction,result.balls)*110-setupDistance*6;
+     if(liveIndices.has(hit)){
+       const range=distance(b,balls[hit]);
+       // A nearby roquet can build a break. A speculative long one is worth less
+       // when the striker is already in position at the wicket.
+       const shortShotValue=(used.size===0?420:32)+threat(result.balls[hit],hoop,direction,result.balls)*30;
+       total+=shortShotValue*Math.exp(-Math.max(0,range-4)/(wicketDistance<4?3.5:6));
+     }else if(hit!==null&&!scores){
+       total-=180;
+     }
+   }
+   const value=total/samples.length;
+   const plan={...candidate,value,reliability:hoops/samples.length};
+   if(!best||value>best.value)best=plan;
+   if(goodSetups>=3&&candidate.type==='approach'&&(!bestSetup||value>bestSetup.value))bestSetup=plan;
+   if(wicketDistance<=4&&candidate.type==='hoop'&&hoops>=3&&(!bestCloseHoop||value>bestCloseHoop.value)){
+     bestCloseHoop=plan;
+   }
+ }
+ if(bestCloseHoop)return bestCloseHoop;
+ if(bestSetup&&best.reliability<.6){
+   const shortRoquet=best.type==='roquet'&&distance(b,balls[best.target])<=4;
+   if(used.size>0||!shortRoquet)return bestSetup;
+ }
  return best;
 }
+
 export function chooseCroquetShot({balls,striker,contactTarget,hoop,direction,posts,dead=[]}){
  const other=balls[contactTarget],used=new Set(dead);let best=null;
  for(let k=0;k<16;k++){const contactAngle=k*Math.PI/8,x=other.x+Math.sin(contactAngle)*.28001,z=other.z+Math.cos(contactAngle)*.28001;
