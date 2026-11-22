@@ -36,3 +36,19 @@ assert.equal(chooseBreakShot(distantBalls).type,'approach','set up from the wron
 assert.equal(chooseBreakShot({...awkwardHoop,dead:[3]}).type,'approach','after a roquet, set up rather than chasing another nearby ball');
 assert.equal(chooseBreakShot({...awkwardHoop,balls:awkwardHoop.balls.map((ball,i)=>i===0?{...ball,z:2}:ball)}).type,'hoop');
 console.log('PASS: Association prioritizes a makeable hoop and avoids chains of setup roquets');
+
+// A playable croquet stroke can leave the striker at the current wicket
+// and stage the contacted ball for the next one.
+const twoHoopPlan={
+  balls:[{x:2.08,z:2,entered:true,side:0},{x:1.8,z:2,entered:true,side:1}],
+  striker:0,contactTarget:1,hoop:{x:0,z:0},direction:-1,
+  posts:[{x:-.33,z:0,r:.045},{x:.33,z:0,r:.045}],
+  nextHoop:{x:4,z:0,d:-1}
+};
+const plannedCroquet=chooseCroquetShot(twoHoopPlan);
+assert(plannedCroquet.useful&&plannedCroquet.hoopChance>=2/3&&plannedCroquet.pioneerChance>=2/3);
+const remoteContact=chooseCroquetShot({...twoHoopPlan,lookAhead:true,balls:[
+  {x:12.28,z:12,entered:true,side:0},{x:12,z:12,entered:true,side:1}
+]});
+assert(remoteContact&&!remoteContact.useful,'contact alone is not a useful follow-up');
+console.log('PASS: croquet planner considers both ball positions and rejects a roquet without an approach');
