@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import {pullPower,coarseHeading,wicketHeading,distanceToBoundary,trackSwing,swingError} from '../dist/shot-control.js';
+import assert from 'node:assert/strict';import {pullPower,coarseHeading,wicketHeading,startingAim,distanceToBoundary,trackSwing,swingError} from '../dist/shot-control.js';
 let drag={x:800,y:600,desktop:true,power:0,previous:0};assert.equal(pullPower(drag,{clientX:480,clientY:600,shiftKey:false}),1);assert.equal(pullPower(drag,{clientX:640,clientY:600,shiftKey:false}),.5);assert.equal(pullPower(drag,{clientX:640,clientY:600,shiftKey:true}),.1);
 drag={...drag,power:.5,previous:160};assert.equal(pullPower(drag,{clientX:640,clientY:600,shiftKey:true}),.5,'holding Shift does not jump power');assert.equal(pullPower(drag,{clientX:656,clientY:600,shiftKey:true}),.49,'fine mode reduces power continuously');assert.equal(pullPower(drag,{clientX:656,clientY:600,shiftKey:false}),.45);
 assert.equal(pullPower({x:0,y:500,desktop:false,power:0,previous:0},{clientX:0,clientY:545,shiftKey:false}),.25,'longer touch pull gives finer power control');assert.equal(coarseHeading({x:5,z:9,aimAngle:1.23}),1.23,'manual aim preserved');const coarse=coarseHeading({x:13,z:16});assert(Math.abs(coarse/(Math.PI/4)-Math.round(coarse/(Math.PI/4)))<1e-10);assert.equal(distanceToBoundary({x:0,z:0},Math.PI),17.5);assert.equal(distanceToBoundary({x:13,z:0},Math.PI/2),1);
@@ -12,3 +12,19 @@ const touch={x:100,y:200,desktop:false};trackSwing(touch,{clientX:80,clientY:280
 assert(Math.abs(swingError({cross:1000,travel:1}))<=Math.PI/22.5,'error is bounded at eight degrees');console.log('PASS: straight swing, jitter tolerance, full pull path, touch deviation and bounded mishits');
 
 assert.equal(swingError({desktop:false,cross:12,travel:120}),0,'normal thumb wobble is forgiven');assert(Math.abs(swingError({desktop:false,cross:500,travel:180}))<=Math.PI/60,'mobile mishits are capped at three degrees');assert.equal(pullPower({x:0,y:600,desktop:false,power:0,previous:0,viewportHeight:740},{clientX:0,clientY:724,shiftKey:false}),1,'full power remains reachable near the screen bottom');
+
+
+const target={x:0,z:0};
+for(const distance of [2,5,12,22]){
+  const ball={x:0,z:distance};
+  for(const side of [-1,1]){
+    const offset=startingAim(ball,target,side)-wicketHeading(ball,target);
+    const miss=distance*Math.tan(offset);
+    assert(Math.abs(miss)>=.33,'an unadjusted straight shot cannot split the wicket');
+    assert(Math.abs(miss)<.4,'the starting line stays near the wicket');
+    assert.equal(Math.sign(miss),side);
+  }
+}
+const close={x:0,z:.5};
+assert(Math.abs(startingAim(close,target,1)-wicketHeading(close,target))<=Math.PI/15+1e-10,
+  'short tap-ins have a bounded starting angle');

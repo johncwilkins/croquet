@@ -7,7 +7,7 @@ import {heldPower,accuracyPosition,timingError,contactAngle,ACCURACY_MS,canStart
 import {initFullscreen} from './fullscreen.js';
 import * as THREE from './vendor/three.module.js';
 import {VARIANTS,VariantMatch} from './variants.js';
-import {pullPower,wicketHeading,distanceToBoundary,shotAimTarget} from './shot-control.js';
+import {pullPower,wicketHeading,startingAim,distanceToBoundary,shotAimTarget} from './shot-control.js?v=manual-lineup';
 import {launchVelocity,GRAVITY,airborne,advanceFlight,collideUpright,collideArch,collideBalls} from './flight.js';
 import {CanvasRenderer} from './fallback.js';
 import {beginHoopStroke,trackHoopSegment,hoopWinner,resetHoopProgress} from './scoring.js';
@@ -72,7 +72,25 @@ const scoringHoop=()=>{const t=target(),[x,z]=coords(t);return {key:point,x,z,di
 const target=()=>match?match.target():seq[Math.min(point,12)],current=()=>balls[turn],human=()=>match?.individual?turn===humanBall:mode==='local'||turn%2===humanSide;
 function notice(t){$('toast').textContent=t;$('toast').classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>$('toast').classList.remove('show'),2700)}
 function beep(freq=350,length=.06){if(!sound)return;audio ||= new (window.AudioContext||window.webkitAudioContext)();audio.resume();const o=audio.createOscillator(),g=audio.createGain();o.type='sine';o.frequency.setValueAtTime(freq,audio.currentTime);g.gain.setValueAtTime(.14,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+length);o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+length)}
-function guideAim(courseOnly=false){shotDistance=9;const b=current();const [x,z]=coords(target()),aimTarget=courseOnly?{x,z}:shotAimTarget(balls,{x,z},match?.croquetTarget);baseAngle=angle=wicketHeading(b,aimTarget);b.aimAngle=angle;$('jump').setAttribute('aria-pressed','false');$('jump').textContent='Roll shot';if(lastTiming===null)$('swingfeedback').textContent='Release, then tap as the mallet reaches the ball';$('aim').value=0;$('aimvalue').value='0°';shotCameraAngle=angle;$('distance').textContent=courseOnly?'Next wicket · adjust for your croquet stroke':match?.croquetTarget!==null&&match?.croquetTarget!==undefined?'Croquet · aim at '+names[match.croquetTarget]:'Yard marks show distance · choose your aim';setPower(0)}
+function guideAim(courseOnly=false){
+  shotDistance=9;
+  const b=current(), [x,z]=coords(target());
+  const contactTarget=courseOnly?null:match?.croquetTarget;
+  const aimTarget=shotAimTarget(balls,{x,z},contactTarget);
+  shotCameraAngle=wicketHeading(b,aimTarget);
+  baseAngle=angle=phase==='aim'&&human()&&!practiceSetup&&contactTarget==null
+    ? startingAim(b,aimTarget,Math.random()<.5?-1:1)
+    : shotCameraAngle;
+  b.aimAngle=angle;
+  $('jump').setAttribute('aria-pressed','false');
+  $('jump').textContent='Roll shot';
+  if(lastTiming===null)$('swingfeedback').textContent='Release, then tap as the mallet reaches the ball';
+  $('aim').value=0;
+  $('aimvalue').value='0°';
+  $('distance').textContent=courseOnly?'Next wicket · adjust for your croquet stroke':
+    contactTarget!=null?'Croquet · aim at '+names[contactTarget]:'Yard marks show distance · choose your aim';
+  setPower(0);
+}
 for(const [key,rules] of Object.entries(VARIANTS)){const section=document.createElement('details'),title=document.createElement('summary');title.textContent=rules.name;section.append(title);for(const text of [rules.summary,rules.details]){const paragraph=document.createElement('p');paragraph.textContent=text;section.append(paragraph)}const limits=document.createElement('p');limits.className='note';limits.textContent='In this app: '+rules.limit;section.append(limits);const link=document.createElement('a');link.href=rules.url;link.target='_blank';link.rel='noreferrer';link.textContent='Official '+rules.name+' rules ↗';section.append(link);$('allrules').append(section)}
 $('jump').onclick=()=>{if(practiceSetup||phase!=='aim'||!human())return;const enabled=$('jump').getAttribute('aria-pressed')!=='true';$('jump').setAttribute('aria-pressed',String(enabled));$('jump').textContent=enabled?'Jump shot ↗':'Roll shot';setPower(power)};
 const desktopShot=matchMedia('(pointer:fine)').matches;document.body.classList.toggle('desktop-shot',desktopShot);
@@ -616,7 +634,12 @@ const controller=createGamepadDriver({
  place(amount){const degrees=((Number($('contactangle').value)+amount*90+540)%360)-180;positionContact(degrees*Math.PI/180)},
  camera(rx,ry,dt){if(placing){if(placementView!=='close'){placementZoom=18;setPlacementView('close')}placementYaw+=rx*dt*1.5;placementYaw=((placementYaw+Math.PI*3)%(Math.PI*2))-Math.PI;placementZoom=Math.max(3,Math.min(32,placementZoom*Math.exp(ry*dt)));$('placeorbit').value=placementYaw*180/Math.PI;$('placezoom').value=placementZoom;}else{if(view!=='shotview')$('shotview').click();shotCameraAngle+=rx*dt*1.3;shotDistance=Math.max(5,Math.min(18,shotDistance*Math.exp(ry*dt)));}},
  view:controllerView,chooseBall:i=>$(i?'choosesecond':'choosefirst').click(),jump:()=>$('jump').click(),
- recenter(){if(placing){placementYaw=0;placementZoom=4.5;$('placeorbit').value=0;$('placezoom').value=4.5;setPlacementView('close')}else{guideAim(true);$('shotview').click()}},
+ recenter(){if(placing){placementYaw=0;placementZoom=4.5;$('placeorbit').value=0;$('placezoom').value=4.5;setPlacementView('close')}else{
+   $('shotview').click();
+   const [x,z]=coords(target());
+   shotCameraAngle=wicketHeading(current(),{x,z});
+   shotDistance=9;
+ } },
  confirmPlacement:()=>$('placeconfirm').click()
  }});
 window.addEventListener('blur',()=>controller.reset());
