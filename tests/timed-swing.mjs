@@ -7,7 +7,10 @@ import {VariantMatch} from '../dist/variants.js';
 assert.equal(heldPower(1300),.5);assert.equal(heldPower(6000),1);
 assert.equal(accuracyPosition(600),0);assert.equal(timingError(.055),0);
 assert.equal(timingError(-.055),0);assert(timingError(-.9)<0);assert(timingError(.9)>0);
-assert(Math.abs(timingError(1))<.105);
+assert.equal(timingError(1),Math.PI/24,'the largest miss veers by 7.5 degrees');
+assert.equal(timingError(-1),-timingError(1),'early and late misses have symmetric drift');
+assert(timingError(.5)>1.6*Math.PI/180&&timingError(.5)<1.7*Math.PI/180,
+  'a moderate timing miss adds a modest heading error');
 const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{textContent:'',open:false,classList:{add(){},remove(){}},style:{setProperty(key,value){this[key]=value}},getAttribute:()=> 'false'});return elements.get(id)};
 const source=readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');
 const scope=vm.createContext({$,desktopShot:true,practiceSetup:null,practiceAim:null,pullPower,heldPower,accuracyPosition,timingError,phase:'aim',human:()=>true,placing:false,swingStage:'idle',meterStart:0,spaceStart:0,lastTiming:null,drag:null,power:0,angle:0,shots:[],setPower(p){scope.power=p},strike(a,p,j){scope.shots.push({a,p,j})}});
