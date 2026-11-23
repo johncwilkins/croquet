@@ -10,7 +10,7 @@ assert.equal(timingError(-.055),0);assert(timingError(-.9)<0);assert(timingError
 assert(Math.abs(timingError(1))<.105);
 const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{textContent:'',open:false,classList:{add(){},remove(){}},style:{setProperty(key,value){this[key]=value}},getAttribute:()=> 'false'});return elements.get(id)};
 const source=readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');
-const scope=vm.createContext({$,desktopShot:true,practiceSetup:null,pullPower,heldPower,accuracyPosition,timingError,phase:'aim',human:()=>true,placing:false,swingStage:'idle',meterStart:0,spaceStart:0,lastTiming:null,drag:null,power:0,angle:0,shots:[],setPower(p){scope.power=p},strike(a,p,j){scope.shots.push({a,p,j})}});
+const scope=vm.createContext({$,desktopShot:true,practiceSetup:null,practiceAim:null,pullPower,heldPower,accuracyPosition,timingError,phase:'aim',human:()=>true,placing:false,swingStage:'idle',meterStart:0,spaceStart:0,lastTiming:null,drag:null,power:0,angle:0,shots:[],setPower(p){scope.power=p},strike(a,p,j){scope.shots.push({a,p,j})}});
 vm.runInContext(source.slice(source.indexOf('function resetMeter'),source.indexOf('function updatePlacementUI')),scope);
 vm.runInContext('startMeter(100);releaseMeter(1400)',scope);assert.equal(scope.power,.5);assert.equal(scope.swingStage,'accuracy');assert.equal(scope.shots.length,0,'release must not strike');
 vm.runInContext('startMeter(2000);releaseMeter(2050)',scope);assert.equal(scope.shots.length,1);assert.equal(scope.shots[0].a,0,'center timing is straight');assert.equal(scope.shots[0].p,.5);assert.equal(scope.swingStage,'idle');

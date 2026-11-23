@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {OffsideRule} from '../dist/offside.js';
 import * as flight from '../dist/flight.js';
 import {beginHoopStroke, hoopWinner, trackHoopSegment, resetHoopProgress} from '../dist/scoring.js';
-import {timingError} from '../dist/timed-swing.js';
+import {heldPower, accuracyPosition, timingError} from '../dist/timed-swing.js';
 import {SIX, GOLF_ROUTE} from '../dist/variants.js';
 
 const source=readFileSync(new URL('../dist/game.js',import.meta.url),'utf8');
@@ -18,7 +18,10 @@ function $(id){
     addEventListener(){},
     setAttribute(){},
     querySelector(){return {}},
-    click(){}
+    click(){},
+    classList:{add(){},remove(){}},
+    style:{setProperty(){}},
+    getAttribute(){return "false"}
   });
   return elements.get(id);
 }
@@ -26,10 +29,12 @@ const balls=Array.from({length:4},()=>({}));
 const hoop=GOLF_ROUTE[0], [x,z]=SIX[hoop.h];
 const scope=vm.createContext({
   $, balls, ...flight, F:2.2, phase:'setup', scores:[0,0], practiceSetup:null,
-  match:null, lastTiming:null, shotHeight:'classic', desktopShot:true, controllerConnected:false,
+  match:null, lastTiming:null, practiceAim:null, practicePower:0,
+  swingStage:'idle', human:()=>true, placing:false,
+  performance:{now:()=>7000}, heldPower, accuracyPosition, shotHeight:'classic', desktopShot:true, controllerConnected:false,
   controllerFields:[['gpvariant','variant'],['gpplayers','players']],
   controllerMenus:{clear(){}},
-  document:{body:{classList:{add(){},remove(){}}}},
+  document:{body:{dataset:{},classList:{add(){},remove(){}}}},
   closeControllerMenu(){ $('controllerdialog').close() },
   openControllerMenu(){ $('gpvariant').value='golf';$('controllerdialog').showModal() },
   controllerFieldState(){},
@@ -40,9 +45,11 @@ const scope=vm.createContext({
   THREE:{MathUtils:{clamp:(n,min,max)=>Math.max(min,Math.min(max,n))}},
   guideAim(){scope.angle=Math.PI},
   setPower(value){scope.power=value},
+  strike(...args){scope.struck=args},
   reset(startMatch){
     assert.equal(startMatch,false,'practice cannot start the opening procedure');
     scope.phase='setup';
+    scope.swingStage='idle';
     scope.lastTiming=null;
     scope.offsideRule=new OffsideRule();
     for(const ball of balls){
@@ -51,6 +58,7 @@ const scope=vm.createContext({
     }
   }
 });
+vm.runInContext(source.slice(source.indexOf('function resetMeter'),source.indexOf('function updateBallTargets')),scope);
 vm.runInContext(source.slice(source.indexOf('function grassInfluence'),source.indexOf('let offsideRule')),scope);
 vm.runInContext(source.slice(source.indexOf('function updatePracticeCue'),source.indexOf('const controllerFields=')),scope);
 
@@ -64,6 +72,31 @@ assert.equal(balls.filter(ball=>ball.entered).length,1);
 assert.equal(balls[0].z,z+3);
 assert.equal(scope.angle,Math.PI+.15);
 assert.equal($('practicecue').hidden,false);
+scope.updatePracticeCue();
+assert.equal(scope.document.body.dataset.practiceStep,'aim');
+scope.startMeter(10);
+assert.equal(scope.swingStage,'idle','line up the shot before charging');
+scope.angle=Math.PI;
+scope.updatePracticeCue();
+assert.equal(scope.document.body.dataset.practiceStep,'power');
+assert.match($('practicecue').textContent,/highlighted Swing Box/);
+scope.startMeter(100);
+scope.releaseMeter(880);
+assert.equal(scope.swingStage,'practice-ready','release pauses before the timing window');
+assert.equal($('practiceready').open,true);
+assert.match($('practicereadyhint').textContent,/the instant the mallet touches the ball/);
+scope.finishMeter(4000);
+assert.equal(scope.struck,undefined,'no strike while reading the instructions');
+$('practicebegin').onclick();
+assert.equal(scope.swingStage,'accuracy');
+assert.equal($('practiceready').open,false);
+scope.pausePracticeSwing(true);
+assert.match($('practicereadyhint').textContent,/passed the ball/);
+assert.equal(scope.struck,undefined,'missing the window allows a retry without taking a shot');
+$('practicebegin').onclick();
+scope.finishMeter(7600);
+assert.equal(scope.struck[1],.3,'preserve power across the read and retry pauses');
+assert.equal(scope.struck[3],0,'time the strike from the explicit swing start');
 
 function roll(power,timing){
   scope.lastTiming=timing;
