@@ -3,7 +3,7 @@ import {createGamepadDriver} from './gamepad.js';
 import {createMenuNavigator} from './gamepad-ui.js';
 import {openingChoice,drawHumanColour} from './opening.js';
 import {nextBallTargets} from './ball-targets.js';
-import {heldPower,accuracyPosition,timingError,contactAngle,ACCURACY_MS,canStartPull} from './timed-swing.js';
+import {heldPower,accuracyPosition,timingError,contactAngle,ACCURACY_MS,canStartPull} from './timed-swing.js?v=timing-drift';
 import {initFullscreen} from './fullscreen.js';
 import * as THREE from './vendor/three.module.js';
 import {VARIANTS,VariantMatch} from './variants.js';
