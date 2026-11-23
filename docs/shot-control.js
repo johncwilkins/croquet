@@ -5,6 +5,13 @@ export function distanceToBoundary(ball,angle){const dx=Math.sin(angle),dz=Math.
 
 export function wicketHeading(ball,target){return Math.atan2(target.x-ball.x,target.z-ball.z)}
 
+// Start near the target while leaving a small correction for the player.
+// Scale by distance and cap the angle so tap-ins never point way off line.
+export function startingAim(ball,target,side){
+  const range=Math.hypot(target.x-ball.x,target.z-ball.z);
+  return wicketHeading(ball,target)+side*Math.min(Math.PI/15,Math.atan2(.36,range));
+}
+
 // Measure sideways deviation along the whole pull, including a crooked path
 // that returns to the centre before release. Allow a few pixels of hand jitter.
 export function trackSwing(drag,event){const cross=drag.desktop?event.clientY-drag.y:event.clientX-drag.x;if(Math.abs(cross)>Math.abs(drag.cross||0))drag.cross=cross;drag.travel=Math.max(drag.travel||0,drag.desktop?drag.x-event.clientX:event.clientY-drag.y);return swingError(drag)}
