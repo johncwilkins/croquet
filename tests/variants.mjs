@@ -25,3 +25,11 @@ const {shotAimTarget,wicketHeading}=await import('../dist/shot-control.js');
 for(const angle of [-Math.PI,-Math.PI/2,0,Math.PI/2,.61,2.44]){const bs=balls(),game=new VariantMatch('association',bs);bs[0].x=0;bs[0].z=0;bs[1].entered=true;bs[1].x=0;bs[1].z=0;game.croquetTarget=1;game.dead.add(1);game.placeCroquet(angle);const target=shotAimTarget(bs,game.target(),game.croquetTarget),heading=wicketHeading(bs[0],target);assert.equal(target,bs[1]);bs[0].vx=Math.sin(heading)*2.5;bs[0].vz=Math.cos(heading)*2.5;context.balls=bs;context.match=game;context.posts=[];context.hoopPos=[];game.beginStroke();for(let i=0;i<1200;i++)context.physics(1/240);const result=game.finishStroke();assert(!result.fault,'rotated croquet aim must hit the other ball');assert(Math.hypot(bs[1].x,bs[1].z)>.2,'target ball is sent away');assert.equal(game.turn,0);assert.equal(game.strokes,1,'continuation follows croquet')}
 const course={x:7,z:10};assert.equal(shotAimTarget([],course),course,'ordinary bonus strokes still aim at next wicket');console.log('PASS: croquet aiming and impact after six contact rotations, continuation, and normal next-wicket aiming');
 
+
+// A collision can displace a resting ball just beyond the line between ticks.
+sim=simulate('association',bs=>{
+  Object.assign(bs[0],{x:14.01,z:3,vx:0,vz:0});
+});
+assert(Number.isFinite(sim.bs[0].x)&&Number.isFinite(sim.bs[0].z),'stationary ball beyond the line must not poison the simulation');
+assert(sim.bs[0].x<=14);
+console.log('PASS: boundary recovery keeps stationary ball positions finite');
