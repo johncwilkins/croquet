@@ -1,3 +1,4 @@
+import {backswingBlocker} from './shot-control.js?v=backswing';
 import {launchVelocity,airborne,advanceFlight,collideUpright,collideArch} from './flight.js';
 import {beginHoopStroke,trackHoopSegment,hoopWinner} from './scoring.js';
 // Choose between a reliable hoop attempt, a clearance, a block, and an approach.
@@ -35,6 +36,7 @@ for(const back of [1.1,2,3])for(const offset of [-.7,0,.7])add(hoop.x+offset,hoo
 let best=null,easyHoop=null;
 const variations=[0,-.65,.65,-1.3,1.3];
 for(const c of candidates){
+ if(backswingBlocker(b,c.angle,c.power,balls,posts))continue;
  const model=level?shotUncertainty(c.power,true,level):shotUncertainty(c.power);
  let total=0,success=0,hits=0,cleanWins=0,opponentPoints=0;
  for(const variation of variations){
@@ -68,7 +70,7 @@ for(const c of candidates){
  if(level&&c.type==='hoop'&&distance(b,hoop)<3&&cleanWins>=4&&opponentPoints===0&&
     (!easyHoop||value>easyHoop.value))easyHoop=plan;
 }
-return easyHoop||best||{angle:Math.atan2(hoop.x-b.x,hoop.z-direction*2-b.z),power:.3,type:'approach',reliability:0}}
+return easyHoop||best}
 
 // Longer Association strokes are harder to place, even on the highest level.
 export function associationRollUncertainty(power,level){
@@ -122,7 +124,7 @@ export function chooseBreakShot(state){
  const wicketDistance=distance(b,hoop);
  const blocked=(hoop.z-b.z)*direction>R&&!clearHoopLine(b,hoop,balls,posts);
  const base=chooseShot({balls,striker,hoop,direction,posts});
- const candidates=[base];
+ const candidates=base?[base]:[];
  const add=(x,z,roll,type,target)=>candidates.push({
    angle:Math.atan2(x-b.x,z-b.z),power:Math.min(.95,Math.sqrt(2*F*roll)/MAX),type,target
  });
@@ -155,6 +157,7 @@ export function chooseBreakShot(state){
  let best=null,bestCloseHoop=null,bestSetup=null,bestDefense=null;
  for(const candidate of candidates){
    const {angle,power}=candidate;
+   if(backswingBlocker(b,angle,power,balls,posts))continue;
    const {angleSD,speedSpread}=associationRollUncertainty(power,level);
    let total=0,hoops=0,goodSetups=0,followUp=null,followUpHits=0,defensiveHits=0,defensiveGain=0;
    for(const [directionError,paceError] of samples){
@@ -267,6 +270,7 @@ export function chooseCroquetShot({
    const offsets=lookAhead?[-.45,0,.45]:[-.65,-.3,0,.3,.65];
    for(const offset of offsets)for(const power of [.12,.16,.26,.4,.55]){
      const angle=toward+offset;
+     if(backswingBlocker(setup[striker],angle,power,setup,posts))continue;
      const predicted=outcome(setup,angle,power);
      if(predicted)candidates.push({angle,power,contactAngle,type:'croquet',setup,predicted});
    }
@@ -299,7 +303,7 @@ export function chooseCroquetShot({
 export function chooseJumpShot({balls,striker,hoop,direction,posts,arches=[],level='pro'}, ground) {
   const ball=balls[striker];
   const range=distance(ball,hoop);
-  if((hoop.z-ball.z)*direction<=R||range>18||ground.reliability>=.8||ground.type==='roquet'||ground.type==='defensive-clearance')return null;
+  if((hoop.z-ball.z)*direction<=R||range>18||ground?.reliability>=.8||ground?.type==='roquet'||ground?.type==='defensive-clearance')return null;
   const blockers=[...balls.filter((other,i)=>i!==striker&&other.entered)
     .map(other=>({...other,r:R})),...posts];
   const dx=hoop.x-ball.x,dz=hoop.z-ball.z;
@@ -311,17 +315,17 @@ export function chooseJumpShot({balls,striker,hoop,direction,posts,arches=[],lev
 
   const angle=Math.atan2(dx,dz);
   const samples=[[0,0,0],[-1,-.7,-1],[1,.7,-1],[-.6,.85,1],[.6,-.85,1]];
-  const groundWins=samples.filter(([error])=>{
+  const groundWins=ground?samples.filter(([error])=>{
     const noisyAngle=ground.angle+error*shotUncertainty(ground.power,true,level).angleSD;
     return simulate(balls,striker,noisyAngle,ground.power,posts,hoop,direction).scored===ball.side;
-  }).length;
+  }).length:0;
   if(groundWins>=4)return null;
 
   let best=null;
   const base=Math.sqrt(2*F*(range+.7))/MAX;
   for(const factor of [.8,.9,1,1.1,1.2,1.32,1.46,1.6]){
     const power=base*factor;
-    if(power>.98)continue;
+    if(power>.98||backswingBlocker(ball,angle,power,balls,posts))continue;
     const uncertainty=shotUncertainty(power,true,level,'amateur',true);
     const wins=samples.filter(([aim,pace,loft])=>jumpRunsHoop(
       {balls,striker,hoop,direction,posts,arches},

@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';import {pullPower,coarseHeading,wicketHeading,startingAim,distanceToBoundary,trackSwing,swingError} from '../dist/shot-control.js';
+import assert from 'node:assert/strict';import {pullPower,coarseHeading,wicketHeading,startingAim,distanceToBoundary,backswingBlocker,trackSwing,swingError} from '../dist/shot-control.js';
 let drag={x:800,y:600,desktop:true,power:0,previous:0};assert.equal(pullPower(drag,{clientX:480,clientY:600,shiftKey:false}),1);assert.equal(pullPower(drag,{clientX:640,clientY:600,shiftKey:false}),.5);assert.equal(pullPower(drag,{clientX:640,clientY:600,shiftKey:true}),.1);
 drag={...drag,power:.5,previous:160};assert.equal(pullPower(drag,{clientX:640,clientY:600,shiftKey:true}),.5,'holding Shift does not jump power');assert.equal(pullPower(drag,{clientX:656,clientY:600,shiftKey:true}),.49,'fine mode reduces power continuously');assert.equal(pullPower(drag,{clientX:656,clientY:600,shiftKey:false}),.45);
 assert.equal(pullPower({x:0,y:500,desktop:false,power:0,previous:0},{clientX:0,clientY:545,shiftKey:false}),.25,'longer touch pull gives finer power control');assert.equal(coarseHeading({x:5,z:9,aimAngle:1.23}),1.23,'manual aim preserved');const coarse=coarseHeading({x:13,z:16});assert(Math.abs(coarse/(Math.PI/4)-Math.round(coarse/(Math.PI/4)))<1e-10);assert.equal(distanceToBoundary({x:0,z:0},Math.PI),17.5);assert.equal(distanceToBoundary({x:13,z:0},Math.PI/2),1);
@@ -28,3 +28,15 @@ for(const distance of [2,5,12,22]){
 const close={x:0,z:.5};
 assert(Math.abs(startingAim(close,target,1)-wicketHeading(close,target))<=Math.PI/15+1e-10,
   'short tap-ins have a bounded starting angle');
+
+const striker={x:0,z:0,entered:true};
+const behind={x:0,z:-1.6,entered:true};
+const forward={x:0,z:.28,entered:true};
+const peg={x:0,z:-1.6,r:.075,id:'peg'};
+assert.equal(backswingBlocker(striker,0,.3,[striker,behind,forward],[]),undefined,
+  'a shorter stroke clears the ball behind and can still contact the ball ahead');
+assert.equal(backswingBlocker(striker,0,.6,[striker,behind,forward],[]),behind);
+assert.equal(backswingBlocker(striker,0,.6,[striker,forward],[peg]),peg);
+assert.equal(backswingBlocker(striker,Math.PI/2,.6,[striker,behind,forward],[peg]),undefined,
+  're-aiming gives the mallet room to swing');
+assert.equal(backswingBlocker(striker,0,.6,[striker,{...behind,finished:true}],[]),undefined);

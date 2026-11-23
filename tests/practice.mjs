@@ -27,7 +27,7 @@ function $(id){
 }
 const balls=Array.from({length:4},()=>({}));
 const hoop=GOLF_ROUTE[0], [x,z]=SIX[hoop.h];
-const scope=vm.createContext({
+const scope=vm.createContext({rejectBlockedSwing:()=>false,
   $, balls, ...flight, F:2.2, phase:'setup', scores:[0,0], practiceSetup:null,
   match:null, lastTiming:null, practiceAim:null, practicePower:0,
   swingStage:'idle', human:()=>true, placing:false,
