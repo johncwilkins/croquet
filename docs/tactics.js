@@ -18,8 +18,8 @@ function dot(a,b){return a.x*b.x+a.z*b.z}
 function distance(a,b){return Math.hypot(a.x-b.x,a.z-b.z)}
 function segmentDistance(p,a,b){const dx=b.x-a.x,dz=b.z-a.z,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.z-a.z)*dz)/(dx*dx+dz*dz||1)));return Math.hypot(p.x-a.x-t*dx,p.z-a.z-t*dz)}
 function threat(b,h,dir,all){if(!b.entered)return 0;const forward=(h.z-b.z)*dir,dx=Math.abs(b.x-h.x),d=distance(b,h);if(forward<=R||dx>forward*.8)return 0;const obstructed=all.some(o=>o!==b&&o.entered&&distance(o,b)>.32&&distance(o,h)>.2&&segmentDistance(o,b,h)<R*1.75);return Math.exp(-d/9)*(1-Math.min(.85,dx/(forward+.1)))*(obstructed?.15:1)}
-function simulate(balls,striker,angle,power,posts,h,dir){const hoop={...h,key:h.key??0,direction:dir};const s=balls.map(b=>({...b,hoopRun:b.hoopRun?{...b.hoopRun}:undefined,vx:0,vz:0}));s.forEach(b=>beginHoopStroke(b,hoop));s[striker].vx=Math.sin(angle)*MAX*power;s[striker].vz=Math.cos(angle)*MAX*power;let hitOpponent=false,scored=-1,firstHit=null;const dt=1/100;for(let step=0;step<760;step++){let moving=false;const previous=s.map(b=>({x:b.x,z:b.z}));for(const b of s){if(!b.entered)continue;const px=b.x,pz=b.z;b.x+=b.vx*dt;b.z+=b.vz*dt;const v=Math.hypot(b.vx,b.vz),n=Math.max(0,v-F*dt);if(v>.02)moving=true;if(v){b.vx*=n/v;b.vz*=n/v}for(const p of posts){const dx=b.x-p.x,dz=b.z-p.z,d=Math.hypot(dx,dz),min=R+p.r;if(d<min&&d>1e-5){const nx=dx/d,nz=dz/d;b.x=p.x+nx*min;b.z=p.z+nz*min;const q=b.vx*nx+b.vz*nz;if(q<0){b.vx-=1.6*q*nx;b.vz-=1.6*q*nz}}}if(Math.abs(b.x)>14||Math.abs(b.z)>17.5){b.x=Math.max(-14,Math.min(14,b.x));b.z=Math.max(-17.5,Math.min(17.5,b.z));b.vx=b.vz=0}}
-for(let i=0;i<s.length;i++)for(let j=i+1;j<s.length;j++){const a=s[i],b=s[j];if(!a.entered||!b.entered)continue;const dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz);if(d>1e-5&&d<R*2){const nx=dx/d,nz=dz/d,over=(R*2-d)/2;a.x-=nx*over;a.z-=nz*over;b.x+=nx*over;b.z+=nz*over;const q=(a.vx-b.vx)*nx+(a.vz-b.vz)*nz;if(q>0){if(firstHit===null&&(i===striker||j===striker))firstHit=i===striker?j:i;if(a.side!==b.side)hitOpponent=true;a.vx-=q*.94*nx;a.vz-=q*.94*nz;b.vx+=q*.94*nx;b.vz+=q*.94*nz}}}s.forEach((b,i)=>{if(b.entered)trackHoopSegment(b,previous[i],hoop)});if(!moving)break}scored=hoopWinner(s)?.side??-1;return {balls:s,hitOpponent,scored,firstHit}}
+function simulate(balls,striker,angle,power,posts,h,dir,ballHoops){const hoop={...h,key:h.key??0,direction:dir};const s=balls.map(b=>({...b,hoopRun:b.hoopRun?{...b.hoopRun}:undefined,vx:0,vz:0}));s.forEach((b,i)=>beginHoopStroke(b,ballHoops?.[i]??hoop));s[striker].vx=Math.sin(angle)*MAX*power;s[striker].vz=Math.cos(angle)*MAX*power;let hitOpponent=false,scored=-1,firstHit=null;const dt=1/100;for(let step=0;step<760;step++){let moving=false;const previous=s.map(b=>({x:b.x,z:b.z}));for(const b of s){if(!b.entered)continue;const px=b.x,pz=b.z;b.x+=b.vx*dt;b.z+=b.vz*dt;const v=Math.hypot(b.vx,b.vz),n=Math.max(0,v-F*dt);if(v>.02)moving=true;if(v){b.vx*=n/v;b.vz*=n/v}for(const p of posts){const dx=b.x-p.x,dz=b.z-p.z,d=Math.hypot(dx,dz),min=R+p.r;if(d<min&&d>1e-5){const nx=dx/d,nz=dz/d;b.x=p.x+nx*min;b.z=p.z+nz*min;const q=b.vx*nx+b.vz*nz;if(q<0){b.vx-=1.6*q*nx;b.vz-=1.6*q*nz}}}if(Math.abs(b.x)>14||Math.abs(b.z)>17.5){b.x=Math.max(-14,Math.min(14,b.x));b.z=Math.max(-17.5,Math.min(17.5,b.z));b.vx=b.vz=0}}
+for(let i=0;i<s.length;i++)for(let j=i+1;j<s.length;j++){const a=s[i],b=s[j];if(!a.entered||!b.entered)continue;const dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz);if(d>1e-5&&d<R*2){const nx=dx/d,nz=dz/d,over=(R*2-d)/2;a.x-=nx*over;a.z-=nz*over;b.x+=nx*over;b.z+=nz*over;const q=(a.vx-b.vx)*nx+(a.vz-b.vz)*nz;if(q>0){if(firstHit===null&&(i===striker||j===striker))firstHit=i===striker?j:i;if(a.side!==b.side)hitOpponent=true;a.vx-=q*.94*nx;a.vz-=q*.94*nz;b.vx+=q*.94*nx;b.vz+=q*.94*nz}}}s.forEach((b,i)=>{if(b.entered)trackHoopSegment(b,previous[i],ballHoops?.[i]??hoop)});if(!moving)break}scored=hoopWinner(s)?.side??-1;return {balls:s,hitOpponent,scored,firstHit}}
 export function chooseShot({balls,striker,hoop,direction,posts}){const b=balls[striker],side=b.side,candidates=[],opponents=balls.filter(o=>o.entered&&o.side!==side),baseline=opponents.reduce((v,o)=>v+threat(o,hoop,direction,balls),0);const add=(x,z,roll,type)=>{const d=Math.hypot(x-b.x,z-b.z);if(d<.02)return;candidates.push({angle:Math.atan2(x-b.x,z-b.z),power:Math.min(.98,Math.sqrt(2*F*(roll??d))/MAX),type})};
 const forward=(hoop.z-b.z)*direction;
 if(forward>R){const d=distance(b,hoop);for(const extra of [.4,.9,1.6])add(hoop.x,hoop.z,d+extra,'hoop')}
@@ -42,6 +42,15 @@ function cleanHoopPosition(ball,hoop,direction,balls,posts){
  if(depth<.3||depth>3.3||Math.abs(ball.x-hoop.x)>depth*.42)return false;
  return !balls.some(other=>other!==ball&&other.entered&&segmentDistance(other,ball,hoop)<2*R)
    && !posts.some(post=>segmentDistance(post,ball,hoop)<R+post.r);
+}
+
+// Measure danger at the opponent's own wicket. A nearby ball on the
+// wrong side of its wicket is a much less compelling clearance target.
+function scoringThreat(ball,target,balls,posts){
+ if(!target||!ball.entered||ball.finished)return 0;
+ if(target.stake)return .8*Math.exp(-distance(ball,target)/3.5);
+ if(cleanHoopPosition(ball,target,target.d,balls,posts))return .85+.15*threat(ball,target,target.d,balls);
+ return .65*threat(ball,target,target.d,balls);
 }
 
 function leaveRisk(striker,balls,posts,targets){
@@ -77,20 +86,31 @@ export function chooseBreakShot(state){
    const range=distance(b,o);
    for(const extra of [.45,1.4,3])add(o.x,o.z,range+extra,'roquet',i);
  }
+ const threats=balls.map((other,i)=>other.side!==b.side
+   ? scoringThreat(other,targets[i],balls,posts) : 0);
+ for(const [i,other] of balls.entries()){
+   if(threats[i]<.43)continue;
+   const range=distance(b,other);
+   for(const runOut of [2.5,4.5,7]){
+     add(other.x,other.z,range+runOut,'defensive-clearance',i);
+   }
+ }
  const setup={x:hoop.x,z:hoop.z-direction*1.4};
  for(const back of [1.3,2.5])for(const side of [0,-.45,.45]){
    const point={x:hoop.x+side,z:hoop.z-direction*back};
    add(point.x,point.z,distance(b,point),'approach');
  }
+ const ballHoops=targets.map(target=>target&&!target.stake
+   ? {...target,key:target.key??0,direction:target.d}:null);
  const samples=[[0,0],[-.7,-.7],[.7,.7],[-1.5,.5],[1.5,-.5]];
- let best=null,bestCloseHoop=null,bestSetup=null;
+ let best=null,bestCloseHoop=null,bestSetup=null,bestDefense=null;
  for(const candidate of candidates){
    const {angle,power}=candidate;
    const {angleSD,speedSpread}=associationRollUncertainty(power,level);
-   let total=0,hoops=0,goodSetups=0,followUp=null,followUpHits=0;
+   let total=0,hoops=0,goodSetups=0,followUp=null,followUpHits=0,defensiveHits=0,defensiveGain=0;
    for(const [directionError,paceError] of samples){
      const result=simulate(balls,striker,angle+directionError*angleSD,
-       power*(1+paceError*speedSpread),posts,hoop,direction);
+       power*(1+paceError*speedSpread),posts,hoop,direction,ballHoops);
      const pos=result.balls[striker];
      const hit=result.firstHit;
      const scores=pos.candidate&&hit===null;
@@ -101,7 +121,15 @@ export function chooseBreakShot(state){
      total+=(scores?1200:0)+(linedUp?155:0)+
        threat(pos,hoop,direction,result.balls)*110-setupDistance*6;
      if(!scores)total-=105*leaveRisk(striker,result.balls,posts,targets);
-     if(liveIndices.has(hit)){
+     if(candidate.type==='defensive-clearance'){
+       if(hit!==candidate.target)continue;
+       const opponent=result.balls[hit];
+       const reduction=threats[hit]-scoringThreat(opponent,targets[hit],result.balls,posts);
+       // A peel gives the opponent a point instead of spoiling their position.
+       const gain=opponent.candidate?-.8:reduction;
+       if(gain>.24)defensiveHits++;
+       defensiveGain+=gain;
+     }else if(liveIndices.has(hit)){
        const range=distance(b,balls[hit]);
        if(directionError===0&&range<=8){
          followUp=chooseCroquetShot({...state,balls:result.balls,contactTarget:hit,lookAhead:true});
@@ -114,6 +142,15 @@ export function chooseBreakShot(state){
          total+=payoff*Math.exp(-Math.max(0,range-3)/3.5)*(used.size?.42:1);
        }else total-=145;
      }else if(hit!==null&&!scores)total-=180;
+   }
+   if(candidate.type==='defensive-clearance'){
+     if(defensiveHits>=3&&defensiveGain>=1.25){
+       const value=(total+760*defensiveGain)/samples.length;
+       if(!bestDefense||value>bestDefense.value){
+         bestDefense={...candidate,value,reliability:0};
+       }
+     }
+     continue;
    }
    const value=total/samples.length;
    if(followUp&&followUpHits<3)continue;
@@ -128,6 +165,7 @@ export function chooseBreakShot(state){
    }
  }
  if(bestCloseHoop)return bestCloseHoop;
+ if(bestDefense&&(!best||bestDefense.value>best.value))return bestDefense;
  if(bestSetup&&best.reliability<.6){
    const shortRoquet=best.type==='roquet'&&distance(b,balls[best.target])<=4;
    if(used.size>0||!shortRoquet)return bestSetup;
@@ -149,9 +187,11 @@ export function chooseCroquetShot({
    const pioneer=!!nextHoop&&!nextHoop.stake&&distance(sent,nextHoop)<4&&
      (nextHoop.z-sent.z)*nextHoop.d>.2;
    const approach=distance(pos,{x:hoop.x,z:hoop.z-direction*1.4});
+   const opponentTarget=other.side!==pos.side?targets[contactTarget]:null;
+   const opponentDanger=scoringThreat(sent,opponentTarget,result.balls,posts);
    const value=(pos.candidate?1200:0)+(ready?350:0)+(ready&&pioneer?95:0)
      +threat(pos,hoop,direction,result.balls)*110-approach*16
-     -80*leaveRisk(striker,result.balls,posts,targets);
+     -80*leaveRisk(striker,result.balls,posts,targets)-180*opponentDanger;
    return {ready,pioneer,value};
  }
  const steps=lookAhead?12:16;

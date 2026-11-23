@@ -85,3 +85,25 @@ header{background:none}
 #pad.timing-result .swing-guide i{width:8px;height:8px;top:-2.5px;box-shadow:0 0 0 1px #fff6d8}
 
 #controllerdialog [hidden]{display:none!important}
+
+#gpsetupintro{margin:12px 0 16px}
+#quickstart-title{font-size:16px;margin:0 0 8px}
+.quickstart-steps{
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;
+ list-style:none;padding:0;margin:0;counter-reset:quickstart;
+}
+.quickstart-steps li{
+ counter-increment:quickstart;background:#e7eadc;border-radius:5px;
+ padding:9px 10px;margin:0;font-size:12px;line-height:1.35;
+}
+.quickstart-steps strong{display:block;margin-bottom:4px}
+.quickstart-steps strong::before{content:counter(quickstart) ". ";color:#536b50}
+#controllerdialog #quickrules{margin:9px 0 0;font-size:12px;line-height:1.4}
+#controllerdialog:has(#gpsetupintro:not([hidden])) .controller-settings{margin:12px 0;gap:6px 10px}
+#controllerdialog:has(#gpsetupintro:not([hidden])) .controller-settings select{padding:6px}
+#controllerdialog .note:has(#gpxboxnote[hidden]){display:none}
+@media(max-width:440px){
+ .quickstart-steps{grid-template-columns:1fr;gap:4px}
+ .quickstart-steps li{padding:5px 8px}
+ .quickstart-steps strong{display:inline;margin-right:5px}
+}

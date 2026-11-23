@@ -52,3 +52,19 @@ const remoteContact=chooseCroquetShot({...twoHoopPlan,lookAhead:true,balls:[
 ]});
 assert(remoteContact&&!remoteContact.useful,'contact alone is not a useful follow-up');
 console.log('PASS: croquet planner considers both ball positions and rejects a roquet without an approach');
+
+// An opponent lined up at its own wicket is worth clearing, even when the
+// striker has already used that ball and cannot earn another croquet stroke.
+const defenseState={
+  balls:[{x:0,z:-2,side:0,entered:true},{x:4,z:3,side:1,entered:true}],
+  striker:0,hoop:{x:0,z:0},direction:-1,posts,level:'master',
+  targets:[{x:0,z:0,d:-1},{x:4,z:1.5,d:-1}],dead:[1]
+};
+const clearance=chooseBreakShot(defenseState);
+assert.equal(clearance.type,'defensive-clearance');
+assert.equal(clearance.target,1);
+const safeOpponent={...defenseState,targets:[defenseState.targets[0],{x:4,z:4.5,d:-1}],dead:[]};
+assert.equal(chooseBreakShot(safeOpponent).type,'approach','skip the same ball when clearing it has no benefit');
+const openOwnHoop={...defenseState,balls:[{...defenseState.balls[0],z:2},defenseState.balls[1]]};
+assert.equal(chooseBreakShot(openOwnHoop).type,'hoop','take an easy point before a defensive chase');
+console.log('PASS: purposeful clearances, dead-ball defense, and easy wicket priority');

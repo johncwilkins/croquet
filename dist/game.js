@@ -35,7 +35,7 @@ scene.add(clubCrowd);
 const spectatorMotion=!(renderer instanceof CanvasRenderer);
 let animateSpectators=createSpectators(clubCrowd,spectatorMotion);
 let neighborhoodCrowd, animateNeighborhood, animateClub=animateSpectators;
-for(const z of [-10,9]){box(1.2,.18,4,wood,-18,.85,z,garden);box(.15,1.2,4,wood,-18.55,1.2,z,garden);for(const dz of [-1.5,1.5]){box(.18,.8,.2,darkwood,-18,.4,z+dz,garden)}}
+for(const z of [-14,1]){box(1.2,.18,4,wood,-18,.85,z,garden);box(.15,1.2,4,wood,-18.55,1.2,z,garden);for(const dz of [-1.5,1.5]){box(.18,.8,.2,darkwood,-18,.4,z+dz,garden)}}
 const animateFlags=createFlags(scene);
 let variant='golf',match=null;const hoopPos=[],posts=[],hoopMeshes=[],stakeMeshes=[],seq=[];
 function setCourse(kind){for(const g of hoopMeshes){scene.remove(g);g.userData.label.remove()}for(const g of stakeMeshes)scene.remove(g);hoopPos.length=posts.length=hoopMeshes.length=stakeMeshes.length=seq.length=0;const c=VARIANTS[kind];hoopPos.push(...c.hoops);seq.push(...c.route);hoopPos.forEach(([x,z],i)=>{const colorIndex=kind==='association'?(i===4?5:i===5?4:i):i;const g=createWicket(x,z,colorIndex);for(const side of [-1,1])posts.push({x:x+side*.33,z,r:.045});scene.add(g);hoopMeshes.push(g);const label=document.createElement('span');label.className='hoop-label';$('labels').appendChild(label);g.userData.label=label});for(const p of c.stakes){const g=createPeg(p.x,p.z);scene.add(g);stakeMeshes.push(g);posts.push({...p,r:.075,height:.8})}renderer.lastKey=''}
@@ -217,7 +217,7 @@ function aiShot(){if($('controllerdialog').open||$('helpdialog').open){aiTimer=s
  const ground=variant==='association'?chooseBreakShot({...state,level:difficulty}):chooseShot(state);
  const jump=chooseJumpShot({...state,level:difficulty,arches:hoopPos.map(([x,z])=>({x,z}))},ground);
  const choice=jump??ground;
- const descriptions={jump:'Computer tries a jump over an obstacle',hoop:'Computer attempts the hoop',roquet:'Computer roquets a live ball to build a break',clearance:'Computer lines up a clearance',block:'Computer plays a blocking shot',approach:'Computer sets up for the hoop'};$('history').textContent=descriptions[choice.type]+'.';strike(choice.angle,choice.power,choice.jump)}
+ const descriptions={jump:'Computer tries a jump over an obstacle',hoop:'Computer attempts the hoop',roquet:'Computer roquets a live ball to build a break',clearance:'Computer lines up a clearance','defensive-clearance':'Computer tries to knock a threatening ball away from its hoop',block:'Computer plays a blocking shot',approach:'Computer sets up for the hoop'};$('history').textContent=descriptions[choice.type]+'.';strike(choice.angle,choice.power,choice.jump)}
 function grassInfluence(b,v){const wave=Math.sin(b.x*.67+b.z*.41+(b.grain||0));return {drag:1+(b.rollBias||0)+.012*wave,curve:.0024*Math.sin(b.x*.43-b.z*.59+(b.grain||0))*Math.min(1,v/2)}}
 function collidePost(b,p){if(collideUpright(b,p)){if(match&&p.id)match.recordStake(balls.indexOf(b),p.id);beep(460,.025)}}
 function physics(dt){const h=match?null:scoringHoop(),previous=balls.map(b=>({x:b.x,y:b.y??R,z:b.z}));for(const b of balls){if(!onCourt(b))continue;const px=b.x,pz=b.z;b.x+=b.vx*dt;b.z+=b.vz*dt;const flying=airborne(b);advanceFlight(b,dt);const v=Math.hypot(b.vx,b.vz),grain=grassInfluence(b,v),nv=Math.max(0,v-(flying?0:F*grain.drag*dt));if(v){const a=flying?0:grain.curve*dt,co=Math.cos(a),si=Math.sin(a),vx=b.vx;b.vx=(vx*co-b.vz*si)*nv/v;b.vz=(vx*si+b.vz*co)*nv/v}for(const p of posts)collidePost(b,p);for(const [x,z]of hoopPos)collideArch(b,{x,z});
@@ -383,7 +383,22 @@ $('courtname').textContent=grounds.settings[$('setting').value].title;notice(gro
 let controllerConnected=false;
 const controllerMenus=createMenuNavigator();
 const controllerFields=[['gpvariant','variant'],['gpplayers','players'],['gpmode','mode'],['gpdifficulty','difficulty'],['gpsetting','setting']];
-function controllerFieldState(){$('gpplayers').disabled=$('gpvariant').value==='golf';$('gpmode').disabled=$('gpvariant').value!=='golf'}
+function controllerFieldState(){
+ const game=$('gpvariant').value;
+ $('gpplayers').disabled=game==='golf';
+ $('gpmode').disabled=game!=='golf';
+ $('quickrules').textContent=VARIANTS[game].summary;
+}
+function updateQuickStart(){
+ const gamepad=controllerConnected;
+ $('quickaim').textContent=gamepad?'Use the left stick to aim.':desktopShot
+   ?'Click the lawn to line up your shot.':'Tap the lawn to line up your shot.';
+ $('quickpower').textContent=gamepad?'Hold A or RT for power, then release.'
+   :desktopShot?'Hold in the start zone and pull left. Release to swing.'
+   :'Hold the swing box and drag down. Release to swing.';
+ $('quickstrike').textContent=gamepad?'Press A or RT again as the mallet reaches the ball.'
+   :desktopShot?'Click again as the mallet reaches the ball.':'Tap again as the mallet reaches the ball.';
+}
 function openControllerMenu(){
   if($('offsidedialog').open)return;
   if($('tossdialog').open){notice('Choose your opening colours first.');return}
@@ -401,6 +416,8 @@ function openControllerMenu(){
   $('gpshotheight').value=shotHeight;
   $('controllerheading').textContent=starting?'Set up your game':'Controller & game settings';
   $('gpsetupintro').hidden=!starting;
+  for(const id of ['controllerguide','controllerstatus','gpxboxnote'])$(id).hidden=starting;
+  updateQuickStart();
   $('gpapply').textContent=starting?'Start game':'Apply settings & return';
   for(const id of ['controllerclose','gpnew','gphelp','gpreturn','gprestartnote'])$(id).hidden=starting;
   dialog.showModal();
@@ -431,7 +448,7 @@ const controller=createGamepadDriver({
  getState:()=>({phase,human:human(),placing,swingStage,chooseBall:!!match?.chooseBall,modal:$('offsidedialog').open||$('tossdialog').open||$('controllerdialog').open||$('helpdialog').open}),
  readPads:()=>navigator.getGamepads?.()??[],isSuspended:()=>document.hidden||!document.hasFocus(),
  actions:{
- connected(active){controllerConnected=active;document.body.classList.toggle('gamepad-active',active);$('controllerhint').hidden=!active;$('controllerstatus').textContent=active?'Controller connected. Release buttons and centre the sticks to begin.':'Controller disconnected. Press and release a controller button to reconnect.';if(active)notice('Xbox controller connected');},
+ connected(active){controllerConnected=active;updateQuickStart();document.body.classList.toggle('gamepad-active',active);$('controllerhint').hidden=!active;$('controllerstatus').textContent=active?'Controller connected. Release buttons and centre the sticks to begin.':'Controller disconnected. Press and release a controller button to reconnect.';if(active)notice('Xbox controller connected');},
  cancel:()=>cancelMeter(),settings:openControllerMenu,
  help(){if(phase==='setup'||$('offsidedialog').open||$('tossdialog').open)return;cancelMeter();closeControllerMenu();if($('helpdialog').open)$('helpdialog').close();else $('help').click();controllerMenus.clear();},
  back(){if(phase==='setup'||$('offsidedialog').open)return;if($('tossdialog').open){notice('Choose your opening colours to begin.');return}if($('helpdialog').open)$('helpdialog').close();else closeControllerMenu();controllerMenus.clear();},
