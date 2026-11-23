@@ -107,3 +107,13 @@ header{background:none}
  .quickstart-steps li{padding:5px 8px}
  .quickstart-steps strong{display:inline;margin-right:5px}
 }
+
+.practicing :is(.scoreboard,.course,.live,footer,.header-actions,#hint,#jump){display:none}
+#practicecue{margin:4px 0 0;font-size:13px;line-height:1.35;max-width:320px}
+#practicedialog{max-width:420px}
+@media(max-width:680px){
+ .practicing .shotpanel{bottom:0}
+ .practicing #world{bottom:185px}
+ .practicing #practicecue{max-width:none;font-size:12px}
+ .practicing #controlleropen span{display:inline}
+}
