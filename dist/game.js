@@ -11,7 +11,7 @@ import {pullPower,wicketHeading,distanceToBoundary,shotAimTarget} from './shot-c
 import {launchVelocity,GRAVITY,airborne,advanceFlight,collideUpright,collideArch,collideBalls} from './flight.js';
 import {CanvasRenderer} from './fallback.js';
 import {beginHoopStroke,trackHoopSegment,hoopWinner,resetHoopProgress} from './scoring.js';
-import {chooseShot,chooseJumpShot,chooseBreakShot,chooseCroquetShot,associationRollUncertainty,shotUncertainty,COMPUTER_LEVELS} from './tactics.js';
+import {chooseShot,chooseJumpShot,chooseBreakShot,chooseCroquetShot,associationRollUncertainty,shotUncertainty,COMPUTER_LEVELS} from './tactics.js?v=association-defense';
 import {createGrounds} from './grounds.js';
 import {createMallet,createWicket,createFlags,createPlanting,createSpectators,createPeg} from './details.js';
 const $=id=>document.getElementById(id), scene=new THREE.Scene();
@@ -225,12 +225,12 @@ function aiShot(){if($('controllerdialog').open||$('helpdialog').open){aiTimer=s
    level:difficulty
  }:{};
  const state={balls:balls.map(b=>({x:b.x,z:b.z,entered:onCourt(b),finished:b.finished,side:b.side,hoopRun:b.hoopRun?{...b.hoopRun}:undefined})),striker:turn,hoop:{key:point,x,z},direction:t.d,posts,dead:match?[...match.dead]:[],...associationPlan};
- if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const choice=chooseCroquetShot({...state,contactTarget:match.croquetTarget});if(choice){match.placeCroquet(choice.contactAngle);$('contactangle').value=choice.contactAngle*180/Math.PI;guideAim();$('history').textContent=choice.pioneerChance>=2/3?'Computer takes croquet and sets a ball near the following hoop.':'Computer takes croquet and lines up for the hoop.';strike(choice.angle,choice.power);return}const o=balls[match.croquetTarget];strike(Math.atan2(o.x-current().x,o.z-current().z),.15);return}
+ if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const choice=chooseCroquetShot({...state,contactTarget:match.croquetTarget});if(choice){match.placeCroquet(choice.contactAngle);$('contactangle').value=choice.contactAngle*180/Math.PI;guideAim();$('history').textContent=choice.pioneerChance>=2/3?'Computer takes croquet and sets a ball near the following hoop.':'Computer takes croquet and plays toward the hoop.';strike(choice.angle,choice.power);return}const o=balls[match.croquetTarget];strike(Math.atan2(o.x-current().x,o.z-current().z),.15);return}
  if(t.stake){const d=Math.hypot(x-current().x,z-current().z);strike(Math.atan2(x-current().x,z-current().z),Math.min(.95,Math.sqrt(2*F*(d+.7))/MAX));return}
  const ground=variant==='association'?chooseBreakShot({...state,level:difficulty}):chooseShot(variant==='golf'?{...state,level:difficulty}:state);
  const jump=chooseJumpShot({...state,level:difficulty,arches:hoopPos.map(([x,z])=>({x,z}))},ground);
  const choice=jump??ground;
- const descriptions={jump:'Computer tries a jump over an obstacle',hoop:'Computer attempts the hoop',roquet:'Computer roquets a live ball to build a break',clearance:'Computer lines up a clearance','defensive-clearance':'Computer tries to knock a threatening ball away from its hoop',block:'Computer plays a blocking shot',approach:'Computer sets up for the hoop'};$('history').textContent=descriptions[choice.type]+'.';strike(choice.angle,choice.power,choice.jump)}
+ const descriptions={jump:'Computer tries a jump over an obstacle',hoop:'Computer attempts the hoop',roquet:'Computer roquets a live ball to build a break',clearance:'Computer lines up a clearance','defensive-clearance':'Computer tries to knock a threatening ball away from its hoop',block:'Computer plays a blocking shot',approach:'Computer sets up for the hoop'};$('history').textContent=(choice.routeChance&&choice.type==='roquet'?'Computer roquets a live ball to get around the obstruction':descriptions[choice.type])+'.';strike(choice.angle,choice.power,choice.jump)}
 function grassInfluence(b,v){const wave=Math.sin(b.x*.67+b.z*.41+(b.grain||0));return {drag:1+(b.rollBias||0)+.012*wave,curve:.0024*Math.sin(b.x*.43-b.z*.59+(b.grain||0))*Math.min(1,v/2)}}
 function collidePost(b,p){if(collideUpright(b,p)){if(match&&p.id)match.recordStake(balls.indexOf(b),p.id);beep(460,.025)}}
 function physics(dt){const h=match?null:scoringHoop(),previous=balls.map(b=>({x:b.x,y:b.y??R,z:b.z}));for(const b of balls){if(!onCourt(b))continue;const px=b.x,pz=b.z;b.x+=b.vx*dt;b.z+=b.vz*dt;const flying=airborne(b);advanceFlight(b,dt);const v=Math.hypot(b.vx,b.vz),grain=grassInfluence(b,v),nv=Math.max(0,v-(flying?0:F*grain.drag*dt));if(v){const a=flying?0:grain.curve*dt,co=Math.cos(a),si=Math.sin(a),vx=b.vx;b.vx=(vx*co-b.vz*si)*nv/v;b.vz=(vx*si+b.vz*co)*nv/v}for(const p of posts)collidePost(b,p);for(const [x,z]of hoopPos)collideArch(b,{x,z});

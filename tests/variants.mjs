@@ -33,3 +33,40 @@ sim=simulate('association',bs=>{
 assert(Number.isFinite(sim.bs[0].x)&&Number.isFinite(sim.bs[0].z),'stationary ball beyond the line must not poison the simulation');
 assert(sim.bs[0].x<=14);
 console.log('PASS: boundary recovery keeps stationary ball positions finite');
+
+// After hoop five, the center peg blocks the direct line to hoop six.
+// A live opponent just off the peg offers a better route through croquet.
+const {chooseBreakShot, chooseCroquetShot, chooseJumpShot}=await import('../dist/tactics.js');
+const pegRoute=simulate('association',(bs,game)=>{
+  Object.assign(bs[0],{x:0,z:7,progress:5});
+  Object.assign(bs[1],{x:-.85,z:.1,entered:true,progress:1});
+  const posts=[...game.config.hoops.flatMap(([x,z])=>[-.33,.33].map(dx=>({x:x+dx,z,r:.045}))),
+    ...game.config.stakes.map(peg=>({...peg,r:.075,height:.8}))];
+  const state={balls:bs,striker:0,hoop:game.target(),direction:-1,posts,level:'pro',
+    targets:bs.map((_,i)=>game.target(i)),arches:game.config.hoops.map(([x,z])=>({x,z}))};
+  const plan=chooseBreakShot(state);
+  assert.equal(plan.type,'roquet');
+  assert.equal(plan.target,1);
+  assert(plan.routeChance>=2/3,'follow-up opens a route to the wicket');
+  assert.equal(chooseJumpShot(state,plan),null,'prefer the useful roquet over the peg jump');
+  assert.notEqual(chooseBreakShot({...state,dead:[1]}).type,'roquet','no bonus from a dead ball');
+  bs[0].vx=Math.sin(plan.angle)*plan.power*15;
+  bs[0].vz=Math.cos(plan.angle)*plan.power*15;
+});
+assert.equal(pegRoute.game.croquetTarget,1,'the real collision earns croquet');
+const pegGame=pegRoute.game;
+const pegBalls=pegRoute.bs;
+const following=chooseCroquetShot({
+  balls:pegBalls,striker:0,contactTarget:1,hoop:pegGame.target(),direction:-1,posts:context.posts,
+  level:'pro',targets:pegBalls.map((_,i)=>pegGame.target(i))
+});
+pegGame.placeCroquet(following.contactAngle);
+pegGame.beginStroke();
+pegBalls[0].vx=Math.sin(following.angle)*following.power*15;
+pegBalls[0].vz=Math.cos(following.angle)*following.power*15;
+for(let tick=0;tick<1800;tick++)context.physics(1/240);
+const afterPeg=pegGame.finishStroke();
+assert.equal(afterPeg.fault,false);
+assert.equal(afterPeg.continued,true,'croquet leaves Blue with a continuation');
+assert(pegBalls[0].z<-.25,'the croquet shot takes Blue to the far side of the peg');
+console.log('PASS: hoop-five-to-six roquet bypasses the peg and earns a continuation in live physics');

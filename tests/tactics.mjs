@@ -76,3 +76,17 @@ assert.equal(chooseShot({...golfPressure,level:'amateur'}).type,'block','use a b
 const golfTapIn={...golfPressure,balls:[{x:0,z:1.2,entered:true,side:0},{x:1.2,z:1.5,entered:true,side:1}]};
 assert.equal(chooseShot({...golfTapIn,level:'master'}).type,'hoop','take the easy Golf wicket');
 console.log('PASS: Golf clearance selection uses difficulty and preserves easy points');
+
+const longDefense={
+  balls:[{x:6,z:-6,side:0,entered:true},{x:-7,z:-6,side:1,entered:true}],
+  striker:0,hoop:{x:7,z:-10.5,key:2},direction:1,level:'pro',
+  posts:[{x:0,z:0,r:.075},...[-1,1].flatMap(side=>[
+    {x:7+side*.33,z:-10.5,r:.045},{x:-7+side*.33,z:-10.5,r:.045}
+  ])],
+  targets:[{x:7,z:-10.5,d:1,key:2},{x:-7,z:-10.5,d:-1,key:1}]
+};
+assert.equal(chooseBreakShot(longDefense).type,'defensive-clearance',
+  'take a makeable 13-yard clearance against a ball lined up for its wicket');
+const harmless={...longDefense,targets:[longDefense.targets[0],{x:-7,z:-1.5,d:-1,key:0}]};
+assert.equal(chooseBreakShot(harmless).type,'approach','skip the same long hit against a ball on the wrong side');
+console.log('PASS: long Association defense needs a real scoring threat');
