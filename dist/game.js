@@ -221,7 +221,21 @@ function aiShot(){if($('controllerdialog').open||$('helpdialog').open){aiTimer=s
 function grassInfluence(b,v){const wave=Math.sin(b.x*.67+b.z*.41+(b.grain||0));return {drag:1+(b.rollBias||0)+.012*wave,curve:.0024*Math.sin(b.x*.43-b.z*.59+(b.grain||0))*Math.min(1,v/2)}}
 function collidePost(b,p){if(collideUpright(b,p)){if(match&&p.id)match.recordStake(balls.indexOf(b),p.id);beep(460,.025)}}
 function physics(dt){const h=match?null:scoringHoop(),previous=balls.map(b=>({x:b.x,y:b.y??R,z:b.z}));for(const b of balls){if(!onCourt(b))continue;const px=b.x,pz=b.z;b.x+=b.vx*dt;b.z+=b.vz*dt;const flying=airborne(b);advanceFlight(b,dt);const v=Math.hypot(b.vx,b.vz),grain=grassInfluence(b,v),nv=Math.max(0,v-(flying?0:F*grain.drag*dt));if(v){const a=flying?0:grain.curve*dt,co=Math.cos(a),si=Math.sin(a),vx=b.vx;b.vx=(vx*co-b.vz*si)*nv/v;b.vz=(vx*si+b.vz*co)*nv/v}for(const p of posts)collidePost(b,p);for(const [x,z]of hoopPos)collideArch(b,{x,z});
-if(Math.abs(b.x)>14||Math.abs(b.z)>17.5){if(match)match.recordOut(balls.indexOf(b));const u=Math.min(Math.abs(b.x)>14?(14-Math.abs(px))/(Math.abs(b.x)-Math.abs(px)):1,Math.abs(b.z)>17.5?(17.5-Math.abs(pz))/(Math.abs(b.z)-Math.abs(pz)):1);b.x=THREE.MathUtils.clamp(px+(b.x-px)*u,-14,14);b.z=THREE.MathUtils.clamp(pz+(b.z-pz)*u,-17.5,17.5);b.vx=b.vz=0}}
+if(Math.abs(b.x)>14||Math.abs(b.z)>17.5){
+  if(match)match.recordOut(balls.indexOf(b));
+  // A ball collision can start this step outside the line. In that case
+  // clamp from the previous position instead of dividing by zero.
+  const crossing=(from,to,limit)=>{
+    if(Math.abs(to)<=limit)return 1;
+    if(Math.abs(from)>=limit)return 0;
+    return (Math.sign(to)*limit-from)/(to-from);
+  };
+  const u=Math.min(crossing(px,b.x,14),crossing(pz,b.z,17.5));
+  b.x=THREE.MathUtils.clamp(px+(b.x-px)*u,-14,14);
+  b.z=THREE.MathUtils.clamp(pz+(b.z-pz)*u,-17.5,17.5);
+  b.vx=b.vz=0;
+}}
+
 for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){const a=balls[i],b=balls[j];if(!onCourt(a)||!onCourt(b))continue;
 if(!match&&Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<=2*R)offsideRule.contact(a,b);
 const impact=collideBalls(a,b);if(impact>0){if(match)match.recordContact(i,j);if(impact>.2)beep(600,.035)}}
