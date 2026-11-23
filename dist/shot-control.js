@@ -1,3 +1,5 @@
+import {R} from './flight.js';
+
 export const DESKTOP_PULL_PIXELS=320;
 export function pullPower(drag,event){const dx=drag.x-event.clientX,dy=event.clientY-drag.y;const delta=drag.desktop?dx:dy;const travel=drag.desktop?(drag.pullPixels??DESKTOP_PULL_PIXELS):Math.max(90,Math.min(180,(drag.viewportHeight??Infinity)-drag.y-16));const sensitivity=event.shiftKey && drag.desktop ? .2 : 1;return Math.max(0,Math.min(1,drag.power+(delta-drag.previous)*sensitivity/travel))}
 export function coarseHeading(ball){return ball.aimAngle??Math.round(Math.atan2(-ball.x,-ball.z)/(Math.PI/4))*(Math.PI/4)}
@@ -19,3 +21,23 @@ export function swingError(drag){const cross=drag.cross||0,touch=drag.desktop===
 
 export function shotAimTarget(balls,courseTarget,croquetTarget=null){return croquetTarget!==null&&croquetTarget!==undefined?balls[croquetTarget]:courseTarget}
 
+
+// Match the animated mallet head: its front face starts at the striker
+// and its back face travels farther back as the player adds power.
+export const MALLET_CONTACT=.51;
+export const malletPullback=power=>.55+power*1.7;
+
+export function backswingBlocker(ball,angle,power,balls,posts){
+  const dx=Math.sin(angle),dz=Math.cos(angle);
+  const near=MALLET_CONTACT-.37,far=malletPullback(power)+.37;
+  const overlaps=(object,radius)=>{
+    const x=object.x-ball.x,z=object.z-ball.z;
+    const depth=-(x*dx+z*dz);
+    if(depth<=0)return false;
+    const along=Math.max(near-depth,depth-far,0);
+    const across=Math.max(Math.abs(x*dz-z*dx)-.142,0);
+    return along*along+across*across<radius*radius;
+  };
+  return balls.find(other=>other!==ball&&other.entered&&!other.finished&&
+    !other.offsidePenalty&&overlaps(other,R))??posts.find(post=>overlaps(post,post.r));
+}

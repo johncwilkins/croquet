@@ -7,11 +7,11 @@ import {heldPower,accuracyPosition,timingError,contactAngle,ACCURACY_MS,canStart
 import {initFullscreen} from './fullscreen.js';
 import * as THREE from './vendor/three.module.js';
 import {VARIANTS,VariantMatch} from './variants.js';
-import {pullPower,wicketHeading,startingAim,distanceToBoundary,shotAimTarget} from './shot-control.js?v=manual-lineup';
+import {pullPower,wicketHeading,startingAim,distanceToBoundary,shotAimTarget,backswingBlocker,malletPullback,MALLET_CONTACT} from './shot-control.js?v=backswing';
 import {launchVelocity,GRAVITY,airborne,advanceFlight,collideUpright,collideArch,collideBalls} from './flight.js';
 import {CanvasRenderer} from './fallback.js';
 import {beginHoopStroke,trackHoopSegment,hoopWinner,resetHoopProgress} from './scoring.js';
-import {chooseShot,chooseJumpShot,chooseBreakShot,chooseCroquetShot,associationRollUncertainty,shotUncertainty,COMPUTER_LEVELS} from './tactics.js?v=association-defense';
+import {chooseShot,chooseJumpShot,chooseBreakShot,chooseCroquetShot,associationRollUncertainty,shotUncertainty,COMPUTER_LEVELS} from './tactics.js?v=backswing';
 import {createGrounds} from './grounds.js';
 import {createMallet,createWicket,createFlags,createPlanting,createSpectators,createPeg} from './details.js';
 const $=id=>document.getElementById(id), scene=new THREE.Scene();
@@ -63,7 +63,6 @@ try {
 let shotPullback=0;
 let lastTiming=null, committedTiming=null, contactTimer=null;
 let practiceSetup=null, practiceAim=null, practicePower=0;
-const MALLET_CONTACT=.51;
 let placementView='close',placementYaw=0,placementZoom=4.5,accuracyClickUntil=0;
 let placing=false,swingStage='idle',meterStart=0,placementPointer=null;
 let turn=0,point=0,scores=[0,0],mode='ai',phase='aim',angle=0,baseAngle=0,power=0,drag=null,spaceStart=0,view='shotview',showRoute=false,shotAge=0,lastTime=performance.now(),aiTimer=null,audio=null,sound=false,camInit=false,scoredThisStroke=false,shotCameraAngle=0,swingStarted=0,shotDistance=9;
@@ -133,6 +132,7 @@ function releaseMeter(now){
   if(swingStage!=='power')return;
   if(!drag)setPower(heldPower(now-meterStart));
   if(power<.025){cancelMeter();return}
+  if(rejectBlockedSwing(angle,power))return;
   if(practiceSetup){
     pausePracticeSwing();
     return;
@@ -227,7 +227,22 @@ function prepareOpening(){phase='toss';placing=false;cancelMeter();updateUI();
  $('tossdialog').showModal();}
 for(const [id,choice]of [['tossfirst','first'],['tosssecond','second'],['tossblue','blue'],['tossred','red']])$(id).onclick=()=>{const result=openingChoice(variant,tossWon,choice),team=result.humanSide?'Red & Yellow':'Blue & Black';startOpening(result,'Coin toss: you play '+team+'.');};
 $('tossdialog').addEventListener('cancel',e=>e.preventDefault());
-function strike(a,p,jump=false,timing=null){if(phase!=='aim'||placing||p<.025)return;if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined&&!croquetPositionValid()){notice('Rotate the contact position clear of obstacles.');return}endMouseOrbit();if(match)match.beginStroke();else offsideRule.begin(current());const contactDelay=timing===null?200:Math.min(200,Math.max(0,timing)*ACCURACY_MS/2);
+function rejectBlockedSwing(heading,power){
+  const blocker=backswingBlocker(current(),heading,power,balls,posts);
+  if(!blocker)return false;
+  if(human()){
+    cancelMeter();
+    const obstacle=blocker.name?blocker.name+' ball':blocker.id==='peg'?'The peg':blocker.id?'A stake':'A wicket';
+    const message=obstacle+' blocks your backswing. Change aim or try a shorter pull.';
+    $('swingfeedback').textContent=message;
+    notice(message);
+  }
+  return true;
+}
+
+function strike(a,p,jump=false,timing=null){if(phase!=='aim'||placing||p<.025)return;
+if(rejectBlockedSwing(timing===null?a:angle,p))return;
+if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined&&!croquetPositionValid()){notice('Rotate the contact position clear of obstacles.');return}endMouseOrbit();if(match)match.beginStroke();else offsideRule.begin(current());const contactDelay=timing===null?200:Math.min(200,Math.max(0,timing)*ACCURACY_MS/2);
 committedTiming=timing===null?null:{position:timing,delay:contactDelay,angle};
 angle=a;setPower(p);phase='swing';swingStarted=performance.now();const b=current();shotAge=0;shotPullback=0;scoredThisStroke=false;balls.forEach(b=>{if(!match)beginHoopStroke(b,scoringHoop());b.grain=Math.random()*Math.PI*2;b.rollBias=(Math.random()-.5)*.026;const [tx,tz]=coords(target());b.startDist=Math.hypot(b.x-tx,b.z-tz)});updateUI();contactTimer=setTimeout(()=>{if(phase!=='swing')return;const uncertainty=!human()&&variant==='association'&&!jump&&match?.croquetTarget===null
   ? associationRollUncertainty(p,difficulty)
@@ -243,12 +258,52 @@ function aiShot(){if($('controllerdialog').open||$('helpdialog').open){aiTimer=s
    level:difficulty
  }:{};
  const state={balls:balls.map(b=>({x:b.x,z:b.z,entered:onCourt(b),finished:b.finished,side:b.side,hoopRun:b.hoopRun?{...b.hoopRun}:undefined})),striker:turn,hoop:{key:point,x,z},direction:t.d,posts,dead:match?[...match.dead]:[],...associationPlan};
- if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const choice=chooseCroquetShot({...state,contactTarget:match.croquetTarget});if(choice){match.placeCroquet(choice.contactAngle);$('contactangle').value=choice.contactAngle*180/Math.PI;guideAim();$('history').textContent=choice.pioneerChance>=2/3?'Computer takes croquet and sets a ball near the following hoop.':'Computer takes croquet and plays toward the hoop.';strike(choice.angle,choice.power);return}const o=balls[match.croquetTarget];strike(Math.atan2(o.x-current().x,o.z-current().z),.15);return}
- if(t.stake){const d=Math.hypot(x-current().x,z-current().z);strike(Math.atan2(x-current().x,z-current().z),Math.min(.95,Math.sqrt(2*F*(d+.7))/MAX));return}
- const ground=variant==='association'?chooseBreakShot({...state,level:difficulty}):chooseShot(variant==='golf'?{...state,level:difficulty}:state);
- const jump=chooseJumpShot({...state,level:difficulty,arches:hoopPos.map(([x,z])=>({x,z}))},ground);
- const choice=jump??ground;
+ const ball=state.balls[turn];
+ if(match?.croquetTarget!=null){
+   const choice=chooseCroquetShot({...state,contactTarget:match.croquetTarget});
+   if(!choice){passBlockedTurn();return}
+   match.placeCroquet(choice.contactAngle);
+   $('contactangle').value=choice.contactAngle*180/Math.PI;
+   guideAim();
+   $('history').textContent=choice.pioneerChance>=2/3?'Computer takes croquet and sets a ball near the following hoop.':'Computer takes croquet and plays toward the hoop.';
+   strike(choice.angle,choice.power);
+   return;
+ }
+ let ground;
+ if(t.stake){
+   const heading=wicketHeading(ball,{x,z}), range=Math.hypot(x-ball.x,z-ball.z);
+   const power=Math.min(.95,Math.sqrt(2*F*(range+.7))/MAX);
+   if(!backswingBlocker(ball,heading,power,state.balls,posts)){strike(heading,power);return}
+ }else{
+   ground=variant==='association'?chooseBreakShot({...state,level:difficulty}):
+     chooseShot(variant==='golf'?{...state,level:difficulty}:state);
+ }
+ const jump=t.stake?null:chooseJumpShot({...state,level:difficulty,arches:hoopPos.map(([x,z])=>({x,z}))},ground);
+ const choice=jump??ground??findClearTap(state);
+ if(!choice){passBlockedTurn();return}
  const descriptions={jump:'Computer tries a jump over an obstacle',hoop:'Computer attempts the hoop',roquet:'Computer roquets a live ball to build a break',clearance:'Computer lines up a clearance','defensive-clearance':'Computer tries to knock a threatening ball away from its hoop',block:'Computer plays a blocking shot',approach:'Computer sets up for the hoop'};$('history').textContent=(choice.routeChance&&choice.type==='roquet'?'Computer roquets a live ball to get around the obstruction':descriptions[choice.type])+'.';strike(choice.angle,choice.power,choice.jump)}
+// If the preferred shot is wired, try a small stroke toward open lawn.
+function findClearTap({balls,striker,hoop,posts}){
+  const ball=balls[striker],toward=wicketHeading(ball,hoop);
+  for(const offset of [0,15,-15,30,-30,60,-60,90,-90,120,-120,150,-150,180]){
+    const angle=toward+offset*Math.PI/180,power=.09;
+    if(distanceToBoundary(ball,angle)>.25&&!backswingBlocker(ball,angle,power,balls,posts)){
+      return {angle,power,type:'approach'};
+    }
+  }
+  return null;
+}
+
+function passBlockedTurn(){
+  if(match)match.beginStroke();
+  else{
+    offsideRule.begin(current());
+    balls.forEach(ball=>beginHoopStroke(ball,scoringHoop()));
+  }
+  finishShot();
+  $('history').textContent='Computer passes with no clear backswing.';
+}
+
 function grassInfluence(b,v){const wave=Math.sin(b.x*.67+b.z*.41+(b.grain||0));return {drag:1+(b.rollBias||0)+.012*wave,curve:.0024*Math.sin(b.x*.43-b.z*.59+(b.grain||0))*Math.min(1,v/2)}}
 function collidePost(b,p){if(collideUpright(b,p)){if(match&&p.id)match.recordStake(balls.indexOf(b),p.id);beep(460,.025)}}
 function physics(dt){const h=match?null:scoringHoop(),previous=balls.map(b=>({x:b.x,y:b.y??R,z:b.z}));for(const b of balls){if(!onCourt(b))continue;const px=b.x,pz=b.z;b.x+=b.vx*dt;b.z+=b.vz*dt;const flying=airborne(b);advanceFlight(b,dt);const v=Math.hypot(b.vx,b.vz),grain=grassInfluence(b,v),nv=Math.max(0,v-(flying?0:F*grain.drag*dt));if(v){const a=flying?0:grain.curve*dt,co=Math.cos(a),si=Math.sin(a),vx=b.vx;b.vx=(vx*co-b.vz*si)*nv/v;b.vz=(vx*si+b.vz*co)*nv/v}for(const p of posts)collidePost(b,p);for(const [x,z]of hoopPos)collideArch(b,{x,z});
@@ -687,7 +742,7 @@ function frame(now){requestAnimationFrame(frame);animateFlags(now/1000);animateS
     shotPullback=Math.max(shotPullback,progress*progress*(3-2*progress));
   }
 accumulator+=dt;let n=0;while(accumulator>=1/240&&n++<16){physics(1/240);accumulator-=1/240}if(shotAge>.25&&balls.every(b=>Math.hypot(b.vx,b.vz)<.015&&!airborne(b))){balls.forEach(b=>{b.vx=b.vz=0});finishShot()}}
-balls.forEach(b=>{b.mesh.visible=onCourt(b);b.mesh.position.set(b.x,b.y??R,b.z);if(b.vx||b.vz){b.mesh.rotation.x+=b.vz*dt/R;b.mesh.rotation.z-=b.vx*dt/R}});activeRing.position.set(b.x,.03,b.z);activeRing.visible=phase==='aim';activeRing.scale.setScalar(1);activeRing.material.color.setHex(0xfff6d8);const dx=Math.sin(angle),dz=Math.cos(angle),rulerLength=distanceToBoundary(b,angle);line.visible=mallet.visible=!placing&&(phase==='aim'||phase==='swing');if(line.visible){const a=line.geometry.attributes.position;a.setXYZ(0,b.x,.07,b.z);a.setXYZ(1,b.x+dx*rulerLength,.07,b.z+dz*rulerLength);a.needsUpdate=true;line.geometry.computeBoundingSphere();line.computeLineDistances();const pullback=.55+power*1.7;
+balls.forEach(b=>{b.mesh.visible=onCourt(b);b.mesh.position.set(b.x,b.y??R,b.z);if(b.vx||b.vz){b.mesh.rotation.x+=b.vz*dt/R;b.mesh.rotation.z-=b.vx*dt/R}});activeRing.position.set(b.x,.03,b.z);activeRing.visible=phase==='aim';activeRing.scale.setScalar(1);activeRing.material.color.setHex(0xfff6d8);const dx=Math.sin(angle),dz=Math.cos(angle),rulerLength=distanceToBoundary(b,angle);line.visible=mallet.visible=!placing&&(phase==='aim'||phase==='swing');if(line.visible){const a=line.geometry.attributes.position;a.setXYZ(0,b.x,.07,b.z);a.setXYZ(1,b.x+dx*rulerLength,.07,b.z+dz*rulerLength);a.needsUpdate=true;line.geometry.computeBoundingSphere();line.computeLineDistances();const pullback=malletPullback(power);
 const timing=swingStage==='accuracy'?accuracyPosition(now-meterStart):null;
 let back=pullback;
 let malletAngle=angle;
