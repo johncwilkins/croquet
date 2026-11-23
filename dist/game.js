@@ -66,7 +66,7 @@ let practiceSetup=null, practiceAim=null, practicePower=0;
 const MALLET_CONTACT=.51;
 let placementView='close',placementYaw=0,placementZoom=4.5,accuracyClickUntil=0;
 let placing=false,swingStage='idle',meterStart=0,placementPointer=null;
-let turn=0,point=0,scores=[0,0],mode='ai',phase='aim',angle=0,baseAngle=0,power=0,drag=null,spaceStart=0,view=shotHeight==='low'?'shotview':'wide',showRoute=false,shotAge=0,lastTime=performance.now(),aiTimer=null,audio=null,sound=false,camInit=false,scoredThisStroke=false,shotCameraAngle=0,swingStarted=0,shotDistance=9;
+let turn=0,point=0,scores=[0,0],mode='ai',phase='aim',angle=0,baseAngle=0,power=0,drag=null,spaceStart=0,view='shotview',showRoute=false,shotAge=0,lastTime=performance.now(),aiTimer=null,audio=null,sound=false,camInit=false,scoredThisStroke=false,shotCameraAngle=0,swingStarted=0,shotDistance=9;
 const coords=t=>t.x!==undefined?[t.x,t.z]:hoopPos[t.h];
 const scoringHoop=()=>{const t=target(),[x,z]=coords(t);return {key:point,x,z,direction:t.d}};
 const target=()=>match?match.target():seq[Math.min(point,12)],current=()=>balls[turn],human=()=>match?.individual?turn===humanBall:mode==='local'||turn%2===humanSide;
@@ -162,7 +162,7 @@ function updateBallTargets(){
   for(const [i,g]of hoopMeshes.entries()){const entries=targets.filter(e=>!e.finished&&e.target.h===i);if(!entries.length)continue;const group=document.createElement('span');group.className='wicket-ball-targets';for(const entry of entries){const tag=document.createElement('span');tag.className='wicket-ball-tag';tag.style.background=colors[entry.index];tag.style.color=entry.index===3?'#172b26':'#fff';tag.textContent=entry.name+(entry.target.d<0?' ↑':' ↓');group.append(tag)}g.userData.label.append(group);}}
 function updatePlacementUI(){updateBallTargets();const contact=match?.croquetTarget!==null&&match?.croquetTarget!==undefined&&human();document.body.classList.toggle('placing',placing);grounds.setShotView(placing?placementView==='close':view==='shotview');$('contactcontrols').hidden=!contact||phase!=='aim';$('contactangle').hidden=!placing;$('placeconfirm').hidden=!placing;$('placeedit').hidden=!contact||placing;$('placeconfirm').disabled=placing&&!croquetPositionValid();$('pad').setAttribute('aria-disabled',String(placing||phase!=='aim'||!human()));$('placementviews').hidden=!placing;$('placementorbit').hidden=!placing||placementView!=='close';for(const id of ['close','wide','overhead'])$('place'+id).setAttribute('aria-pressed',String(placementView===id));if(placing){$('shotheading').textContent='Place your ball';$('hint').textContent='Tap or drag around '+names[match.croquetTarget]+', or use the slider. Use Court or Overhead for context, then Close to position and confirm.';$('contactvalid').textContent=croquetPositionValid()?'Place '+current().name+' around '+names[match.croquetTarget]:'Blocked — choose another side';$('status').textContent='Place '+current().name+' · no stroke yet';}}
 function positionContact(a){if(!placing)return;match.placeCroquet(a);$('contactangle').value=a*180/Math.PI;guideAim();updateUI();}
-$('placeconfirm').onclick=()=>{if(!placing||!croquetPositionValid())return;placing=false;view='shotview';guideAim(true);for(const id of ['wide','shotview','overhead'])$(id).classList.toggle('active',id===view);updateUI();};
+$('placeconfirm').onclick=()=>{if(!placing||!croquetPositionValid())return;placing=false;view='shotview';guideAim(true);syncViewButtons();updateUI();};
 $('placeedit').onclick=()=>{if(phase!=='aim'||!human()||swingStage!=='idle')return;placing=true;placementView='close';cancelMeter();updateUI();};
 function updateUI(){$('difficulty').hidden=mode==='local'&&!match;const b=current(),t=target();malletDetail.setColor(turn);renderer.lastKey='';$('you').textContent=scores[humanSide];$('them').textContent=scores[1-humanSide];$('hoopcount').textContent='HOOP '+String(Math.min(point+1,13)).padStart(2,'0')+' / 13';$('targetname').textContent=String(point+1).padStart(2,'0')+' · Hoop '+(t.h+1);$('ballbadge').style.background=`radial-gradient(circle at 28% 22%,white -90%,${colors[turn]} 55%,#172b26 180%)`;$('turntitle').textContent=practiceSetup?'PRACTICE':point===0?'MAKE YOUR OPENING SHOT':'CONTESTING HOOP '+(point+1);$('status').textContent=phase==='over'?(scores[0]>=7?'Blue & Black win':'Red & Yellow win'):phase==='offside'?'Resolve the offside ball':phase==='moving'?b.name+' is rolling…':(human()?(mode==='local'?(b.side?'Red & Yellow':'Blue & Black'):'Your turn'):phase==='toss'?'Opening coin toss':'Computer thinking')+' · '+b.name+' ball';$('shotheading').textContent=practiceSetup?'Run the hoop':phase==='over'?'A game well played.':human()?(point===0?'A good game starts here.':'Make this one count.'):'The opposition is lining up.';$('hint').textContent=phase==='over'?'Start a new game for another round.':human()?(view==='shotview'?'Tap ahead to aim. Camera stays fixed; tap Shot view to recenter.':'Aim on the lawn. Pull back for power, release, then tap at center.'):'Watch the play. Your next ball follows in colour order.';$('pad').style.opacity=phase==='aim'&&human()?1:.5;hoopMeshes.forEach((g,i)=>{g.userData.label.className='hoop-label'+(i===t.h?' target':'');g.userData.label.textContent=i===t.h?'HOOP '+(point+1):i+1;g.userData.label.style.display=i===t.h||showRoute||placing?'block':'none'});if(match)updateVariantUI();const [x,z]=coords(t);ring.position.set(x,.035,z);arrow.position.set(x,.06,z-t.d*.95);arrow.setDirection(new THREE.Vector3(0,0,t.d||1));arrow.visible=!t.stake;updatePlacementUI();}
 function croquetPositionValid(){const b=current();return Math.abs(b.x)<14&&Math.abs(b.z)<17.5&&!posts.some(p=>Math.hypot(b.x-p.x,b.z-p.z)<R+p.r-.00001)&&!balls.some((o,i)=>i!==turn&&i!==match.croquetTarget&&o.entered&&!o.finished&&Math.hypot(o.x-b.x,o.z-b.z)<R*2-.00001)}
@@ -176,13 +176,18 @@ function beginTurn(){if(phase==='over')return;placementView='close';placementYaw
   resetHoopProgress(b);
   notice(b.name+' plays from the penalty area.');
 }if(match?.chooseBall&&!human()){const choices=balls.map((b,i)=>({b,i})).filter(o=>o.b.side!==humanSide&&!o.b.finished);choices.sort((a,b)=>Math.hypot(a.b.x-match.target(a.i).x,a.b.z-match.target(a.i).z)-Math.hypot(b.b.x-match.target(b.i).x,b.b.z-match.target(b.i).z));if(choices[0]){match.selectBall(choices[0].i);turn=match.turn;b=current()}}if(!b.entered){const pos=match?match.startPosition():{x:13.35,z:16.85};b.x=pos.x;b.z=pos.z;b.entered=true}if(match?.croquetTarget!==null&&match?.croquetTarget!==undefined){const o=balls[match.croquetTarget],t=match.target();const a=Math.atan2(o.x-t.x,o.z-t.z);$('contactangle').value=a*180/Math.PI;match.placeCroquet(a);if(!croquetPositionValid()){for(let k=0;k<72;k++){const alternative=a+k*Math.PI/36;match.placeCroquet(alternative);if(croquetPositionValid()){$('contactangle').value=((alternative*180/Math.PI+540)%360)-180;break}}}}placing=human()&&match?.croquetTarget!==null&&match?.croquetTarget!==undefined;guideAim();updateUI();if(!human())aiTimer=setTimeout(aiShot,1200)}
-function reset(startMatch=true){clearTimeout(contactTimer);lastTiming=null;committedTiming=null;resetMeter();endMouseOrbit();clearTimeout(aiTimer);offsideRule=new OffsideRule();offsideQueue=[];$('offsidedialog').close();humanSide=0;humanBall=0;grounds.randomizeLawn();setCourse(variant);if(variant!=='golf')mode='ai';$('mode').value=mode;$('mode').hidden=variant!=='golf';$('players').hidden=variant==='golf';balls.forEach((b,i)=>b.side=i%2);turn=0;point=0;scores=[0,0];balls.forEach(b=>{b.x=13.35;b.z=16.85;b.vx=b.vz=b.vy=0;b.y=R;b.entered=false;b.finished=false;b.progress=0;delete b.aimAngle;delete b.offsidePenalty;resetHoopProgress(b)});match=variant==='golf'?null:new VariantMatch(variant,balls,Number($('players').value));document.body.classList.toggle('multiplayer',!!match?.individual);$('opponentlabel').textContent=match?.individual?'COMPUTERS':mode==='local'?'PLAYER 2':'COMPUTER';$('goaltext').textContent=variant==='golf'?'FIRST TO 7':match?.individual?'FIRST TO '+match.config.route.length:'BOTH BALLS HOME';$('footerlabel').textContent=VARIANTS[variant].short+' · 3D CLUB EDITION';$('ruleSummary').textContent=VARIANTS[variant].summary;$('ruleDetails').textContent=VARIANTS[variant].details;$('ruleLimit').textContent='Larger balls and wider hoops for touch play. '+VARIANTS[variant].limit;$('ruleLink').href=VARIANTS[variant].url;$('ruleLink').textContent=VARIANTS[variant].name+' · Official rules ↗';$('ballprogress').hidden=variant==='golf';$('contactcontrols').hidden=true;$('ballchoices').hidden=true;phase='aim';drag=null;spaceStart=0;if(startMatch){
+function reset(startMatch=true){clearTimeout(contactTimer);lastTiming=null;committedTiming=null;resetMeter();endMouseOrbit();clearTimeout(aiTimer);offsideRule=new OffsideRule();offsideQueue=[];$('offsidedialog').close();humanSide=0;humanBall=0;grounds.randomizeLawn();setCourse(variant);if(variant!=='golf')mode='ai';$('mode').value=mode;$('mode').hidden=variant!=='golf';$('players').hidden=variant==='golf';balls.forEach((b,i)=>b.side=i%2);turn=0;point=0;scores=[0,0];balls.forEach(b=>{b.x=13.35;b.z=16.85;b.vx=b.vz=b.vy=0;b.y=R;b.entered=false;b.finished=false;b.progress=0;delete b.aimAngle;delete b.offsidePenalty;resetHoopProgress(b)});match=variant==='golf'?null:new VariantMatch(variant,balls,Number($('players').value));document.body.classList.toggle('multiplayer',!!match?.individual);$('opponentlabel').textContent=match?.individual?'COMPUTERS':mode==='local'?'PLAYER 2':'COMPUTER';$('goaltext').textContent=variant==='golf'?'FIRST TO 7':match?.individual?'FIRST TO '+match.config.route.length:'BOTH BALLS HOME';$('footerlabel').textContent=VARIANTS[variant].short+' · 3D CLUB EDITION';$('ruleSummary').textContent=VARIANTS[variant].summary;$('ruleDetails').textContent=VARIANTS[variant].details;$('ruleLimit').textContent='Larger balls and wider hoops for touch play. '+VARIANTS[variant].limit;$('ruleLink').href=VARIANTS[variant].url;$('ruleLink').textContent=VARIANTS[variant].name+' · Official rules ↗';$('ballprogress').hidden=variant==='golf';$('contactcontrols').hidden=true;$('ballchoices').hidden=true;phase='aim';drag=null;spaceStart=0;
+placing=false;
+view='shotview';
+camInit=false;
+syncViewButtons();
+guideAim();
+if(startMatch){
   $('history').textContent='Choosing colours and opening order…';
   prepareOpening();
 }else{
   phase='setup';
   $('history').textContent='Choose your game settings to begin.';
-  guideAim();
   updateUI();
 }}
 function updateOwnership(){
@@ -192,7 +197,7 @@ function updateOwnership(){
  $('opponentlabel').textContent=match?.individual?'COMPUTERS':mode==='local'?'PLAYER 2':'COMPUTER';
  for(const i of balls.map((_,i)=>i).filter(i=>!owned.includes(i)&&(!match?.individual||i<match.playerCount))){const dot=document.createElement('i');dot.className='dot';dot.style.background=colors[i];$('opponentlabel').append(dot)}
 }
-function startOpening(result,message){humanSide=result.humanSide;humanBall=result.humanBall??humanSide;turn=result.firstSide??0;if(match)match.turn=turn;phase='aim';$('tossdialog').close();updateOwnership();$('history').textContent=message+' '+names[turn]+' plays first.';beginTurn();}
+function startOpening(result,message){humanSide=result.humanSide;humanBall=result.humanBall??humanSide;turn=result.firstSide??0;if(match)match.turn=turn;phase='aim';$('tossdialog').close();updateOwnership();$('history').textContent=message+' '+names[turn]+' plays first.';beginTurn();camInit=false;}
 function prepareOpening(){phase='toss';placing=false;cancelMeter();updateUI();
  if(match?.individual){const colour=drawHumanColour(match.playerCount);$('tosstitle').textContent='Colours drawn by lot';$('tosstext').textContent='You drew '+names[colour]+'. The other colours belong to the computers; Blue plays first.';$('tosschoices').hidden=true;$('tosscontinue').hidden=false;$('tosscontinue').onclick=()=>startOpening({humanSide:colour,humanBall:colour,firstSide:0},'Colours drawn: you play '+names[colour]+'.');}
  else{tossWon=Math.random()<.5;const opponent=mode==='local'?'Player 2':'Computer';const association=variant==='association';$('tosstitle').textContent=tossWon?(mode==='local'?'Player 1 won the coin toss':'You won the coin toss'):opponent+' won the coin toss';
@@ -388,7 +393,8 @@ $('difficulty').value=difficulty;$('difficulty').onchange=()=>{difficulty=$('dif
 $('placezoom').oninput=()=>{placementZoom=Number($('placezoom').value)};
 function zoomPlacement(e){if(!placing)return;e.preventDefault();const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?renderHeight:1);if(placementView!=='close'){placementZoom=18;setPlacementView('close')}placementZoom=Math.max(3,Math.min(32,placementZoom*Math.exp(Math.max(-120,Math.min(120,delta))*.0025)));$('placezoom').value=placementZoom;}
 renderer.domElement.addEventListener('wheel',zoomPlacement,{passive:false});
-for(const id of ['wide','shotview','overhead'])$(id).onclick=()=>{if(placing){setPlacementView(id==='shotview'?'close':id);return}view=id;grounds.setShotView(id==='shotview');shotCameraAngle=angle;updateUI();for(const v of ['wide','shotview','overhead'])$(v).classList.toggle('active',v===id)};$('route').onclick=()=>{showRoute=!showRoute;$('route').classList.toggle('active',showRoute);updateUI()};$('setting').onchange=()=>{const setting=$('setting').value;
+function syncViewButtons(){for(const id of ['wide','shotview','overhead'])$(id).classList.toggle('active',id===view)}
+for(const id of ['wide','shotview','overhead'])$(id).onclick=()=>{if(placing){setPlacementView(id==='shotview'?'close':id);return}view=id;grounds.setShotView(id==='shotview');shotCameraAngle=angle;updateUI();syncViewButtons()};$('route').onclick=()=>{showRoute=!showRoute;$('route').classList.toggle('active',showRoute);updateUI()};$('setting').onchange=()=>{const setting=$('setting').value;
 grounds.set(setting);
 const urban=setting==='playground';
 garden.visible=!urban;
@@ -519,8 +525,6 @@ function endPractice(){
   $('controlleropen').setAttribute('aria-label','Game settings');
   $('controlleropen').querySelector('span').textContent='Settings';
   reset(false);
-  $(shotHeight==='low'?'shotview':'wide').click();
-  camInit=false;
   openControllerMenu();
   for(const [id,value] of Object.entries(selections))$(id).value=value;
   controllerFieldState();
@@ -710,7 +714,6 @@ updateYardRuler(b,dx,dz,rulerLength);hoopMeshes.forEach(g=>{const v=new THREE.Ve
 initFullscreen($('fullscreen'),notice,resize);
 reset(false);
 openControllerMenu();
-for(const id of ['wide','shotview','overhead'])$(id).classList.toggle('active',id===view);
 requestAnimationFrame(frame);
 // Small read-only state surface for verifying the simulation in a browser.
 window.croquet={getState:()=>({variant,strokes:match?.strokes,croquetTarget:match?.croquetTarget,turn:names[turn],point,scores:[...scores],phase,balls:balls.map(b=>({name:b.name,x:b.x,z:b.z,entered:b.entered,progress:b.progress,finished:b.finished})),target:target()})};
