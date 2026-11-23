@@ -76,11 +76,15 @@ export function associationRollUncertainty(power,level){
  return {...model,angleSD:model.angleSD*(1+.6*power),speedSpread:model.speedSpread*1.25};
 }
 
-function cleanHoopPosition(ball,hoop,direction,balls,posts){
- const depth=(hoop.z-ball.z)*direction;
- if(depth<.3||depth>3.3||Math.abs(ball.x-hoop.x)>depth*.42)return false;
+function clearHoopLine(ball,hoop,balls,posts){
  return !balls.some(other=>other!==ball&&other.entered&&segmentDistance(other,ball,hoop)<2*R)
    && !posts.some(post=>segmentDistance(post,ball,hoop)<R+post.r);
+}
+
+function cleanHoopPosition(ball,hoop,direction,balls,posts){
+ const depth=(hoop.z-ball.z)*direction;
+ return depth>=.3&&depth<=3.3&&Math.abs(ball.x-hoop.x)<=depth*.42&&
+   clearHoopLine(ball,hoop,balls,posts);
 }
 
 // Measure danger at the opponent's own wicket. A nearby ball on the
@@ -89,6 +93,9 @@ function scoringThreat(ball,target,balls,posts){
  if(!target||!ball.entered||ball.finished)return 0;
  if(target.stake)return .8*Math.exp(-distance(ball,target)/3.5);
  if(cleanHoopPosition(ball,target,target.d,balls,posts))return .85+.15*threat(ball,target,target.d,balls);
+ const depth=(target.z-ball.z)*target.d;
+ if(depth>=.3&&depth<=8&&Math.abs(ball.x-target.x)<=depth*.65&&
+    clearHoopLine(ball,target,balls,posts))return .75*Math.exp(-distance(ball,target)/13);
  return .65*threat(ball,target,target.d,balls);
 }
 
@@ -113,6 +120,7 @@ export function chooseBreakShot(state){
  const live=balls.map((o,i)=>({o,i})).filter(({o,i})=>i!==striker&&o.entered&&!o.finished&&!used.has(i));
  const liveIndices=new Set(live.map(({i})=>i));
  const wicketDistance=distance(b,hoop);
+ const blocked=(hoop.z-b.z)*direction>R&&!clearHoopLine(b,hoop,balls,posts);
  const base=chooseShot({balls,striker,hoop,direction,posts});
  const candidates=[base];
  const add=(x,z,roll,type,target)=>candidates.push({
@@ -128,10 +136,12 @@ export function chooseBreakShot(state){
  const threats=balls.map((other,i)=>other.side!==b.side
    ? scoringThreat(other,targets[i],balls,posts) : 0);
  for(const [i,other] of balls.entries()){
-   if(threats[i]<.43)continue;
+   if(threats[i]<.34)continue;
    const range=distance(b,other);
-   for(const runOut of [2.5,4.5,7]){
-     add(other.x,other.z,range+runOut,'defensive-clearance',i);
+   if(range<2*R)continue;
+   const dx=(other.x-b.x)/range,dz=(other.z-b.z)/range;
+   for(const runOut of [2.5,5,9])for(const offset of [-.16,-.08,0,.08,.16]){
+     add(other.x+dz*offset,other.z-dx*offset,range+runOut,'defensive-clearance',i);
    }
  }
  const setup={x:hoop.x,z:hoop.z-direction*1.4};
@@ -160,31 +170,36 @@ export function chooseBreakShot(state){
      total+=(scores?1200:0)+(linedUp?155:0)+
        threat(pos,hoop,direction,result.balls)*110-setupDistance*6;
      if(!scores)total-=105*leaveRisk(striker,result.balls,posts,targets);
+     // Avoid giving an opponent their wicket when trying to clear them.
+     const peeledOpponent=result.balls.some((other,i)=>other.side!==b.side&&ballHoops[i]&&other.candidate);
+     if(peeledOpponent)total-=550;
      if(candidate.type==='defensive-clearance'){
        if(hit!==candidate.target)continue;
        const opponent=result.balls[hit];
        const reduction=threats[hit]-scoringThreat(opponent,targets[hit],result.balls,posts);
-       // A peel gives the opponent a point instead of spoiling their position.
-       const gain=opponent.candidate?-.8:reduction;
-       if(gain>.24)defensiveHits++;
+       const gain=peeledOpponent?0:reduction;
+       if(gain>.18)defensiveHits++;
        defensiveGain+=gain;
      }else if(liveIndices.has(hit)){
        const range=distance(b,balls[hit]);
-       if(directionError===0&&range<=8){
-         followUp=chooseCroquetShot({...state,balls:result.balls,contactTarget:hit,lookAhead:true});
-         if(!followUp?.useful)followUp=null;
+       // A roquet around an obstruction can be useful even if croquet
+       // only leaves an open approach rather than an immediate hoop run.
+       if(directionError===0&&range<=(blocked?10:8)){
+         followUp=chooseCroquetShot({...state,balls:result.balls,contactTarget:hit,lookAhead:true,
+           routeFrom:blocked?b:undefined});
+         if(!followUp?.useful&&!followUp?.routeChance)followUp=null;
          else followUp={...followUp,target:hit};
        }
        if(followUp?.target===hit){
          followUpHits++;
-         const payoff=followUp.hoopChance*400+followUp.pioneerChance*105;
+         const payoff=followUp.hoopChance*400+followUp.pioneerChance*105+followUp.routeChance*570;
          total+=payoff*Math.exp(-Math.max(0,range-3)/3.5)*(used.size?.42:1);
        }else total-=145;
      }else if(hit!==null&&!scores)total-=180;
    }
    if(candidate.type==='defensive-clearance'){
-     if(defensiveHits>=3&&defensiveGain>=1.25){
-       const value=(total+760*defensiveGain)/samples.length;
+     if(defensiveHits>=3&&defensiveGain>=.85){
+       const value=(total+1350*defensiveGain)/samples.length;
        if(!bestDefense||value>bestDefense.value){
          bestDefense={...candidate,value,reliability:0};
        }
@@ -194,12 +209,12 @@ export function chooseBreakShot(state){
    const value=total/samples.length;
    if(followUp&&followUpHits<3)continue;
    const plan=followUp
-     ? {...candidate,type:'roquet',target:followUp.target,value,reliability:hoops/samples.length}
+     ? {...candidate,type:'roquet',target:followUp.target,value,reliability:hoops/samples.length,routeChance:followUp.routeChance}
      : {...candidate,value,reliability:hoops/samples.length};
    if(candidate.type==='roquet'&&!followUp)continue;
    if(!best||value>best.value)best=plan;
    if(goodSetups>=3&&candidate.type==='approach'&&(!bestSetup||value>bestSetup.value))bestSetup=plan;
-   if(wicketDistance<=4&&candidate.type==='hoop'&&hoops>=3&&(!bestCloseHoop||value>bestCloseHoop.value)){
+   if(wicketDistance<=4&&candidate.type==='hoop'&&hoops>=4&&(!bestCloseHoop||value>bestCloseHoop.value)){
      bestCloseHoop=plan;
    }
  }
@@ -207,31 +222,39 @@ export function chooseBreakShot(state){
  if(bestDefense&&(!best||bestDefense.value>best.value))return bestDefense;
  if(bestSetup&&best.reliability<.6){
    const shortRoquet=best.type==='roquet'&&distance(b,balls[best.target])<=4;
-   if(used.size>0||!shortRoquet)return bestSetup;
+   if(!best.routeChance&&(used.size>0||!shortRoquet))return bestSetup;
  }
  return best;
 }
 
 export function chooseCroquetShot({
- balls,striker,contactTarget,hoop,direction,posts,nextHoop,targets=[],level='pro',lookAhead=false
+ balls,striker,contactTarget,hoop,direction,posts,nextHoop,targets=[],level='pro',lookAhead=false,routeFrom
 }){
  const other=balls[contactTarget];
  const candidates=[];
+ const hoopTargets=targets.map(target=>target&&!target.stake
+   ? {...target,key:target.key??0,direction:target.d}:null);
+ const setupPoint={x:hoop.x,z:hoop.z-direction*1.4};
  function outcome(setup,angle,power){
-   const result=simulate(setup,striker,angle,power,posts,hoop,direction);
+   const result=simulate(setup,striker,angle,power,posts,hoop,direction,hoopTargets);
    const pos=result.balls[striker],sent=result.balls[contactTarget];
    if(distance(sent,other)<.02||Math.abs(sent.x)>13.9||Math.abs(sent.z)>17.4||
       Math.abs(pos.x)>13.9||Math.abs(pos.z)>17.4)return null;
    const ready=!!pos.candidate||cleanHoopPosition(pos,hoop,direction,result.balls,posts);
    const pioneer=!!nextHoop&&!nextHoop.stake&&distance(sent,nextHoop)<4&&
      (nextHoop.z-sent.z)*nextHoop.d>.2;
-   const approach=distance(pos,{x:hoop.x,z:hoop.z-direction*1.4});
+   const approach=distance(pos,setupPoint);
+   const depth=(hoop.z-pos.z)*direction;
+   const openApproach=depth>.3&&approach<=8&&Math.abs(pos.x-hoop.x)<depth*.65&&
+     clearHoopLine(pos,hoop,result.balls,posts);
+   const route=!!routeFrom&&openApproach&&distance(routeFrom,setupPoint)-approach>=3;
    const opponentTarget=other.side!==pos.side?targets[contactTarget]:null;
    const opponentDanger=scoringThreat(sent,opponentTarget,result.balls,posts);
-   const value=(pos.candidate?1200:0)+(ready?350:0)+(ready&&pioneer?95:0)
+   const peel=opponentTarget&&!opponentTarget.stake&&sent.candidate;
+   const value=(pos.candidate?1200:0)+(ready?350:0)+(ready&&pioneer?95:0)+(openApproach?120:0)
      +threat(pos,hoop,direction,result.balls)*110-approach*16
-     -80*leaveRisk(striker,result.balls,posts,targets)-180*opponentDanger;
-   return {ready,pioneer,value};
+     -80*leaveRisk(striker,result.balls,posts,targets)-300*opponentDanger-(peel?500:0);
+   return {ready,pioneer,route,value};
  }
  const steps=lookAhead?12:16;
  for(let k=0;k<steps;k++){
@@ -254,18 +277,19 @@ export function chooseCroquetShot({
    const {angle,power}=candidate;
    const model=shotUncertainty(power,true,level);
    let valid=1,hoops=Number(predicted.ready),pioneers=Number(predicted.ready&&predicted.pioneer);
-   let total=predicted.value;
+   let total=predicted.value,routes=Number(predicted.route);
    for(const side of [-1,1]){
      const result=outcome(setup,angle+side*model.angleSD,
        power*(1+side*.8*model.speedSpread));
      if(!result){total-=600;continue}
      valid++;
      if(result.ready)hoops++;
+     if(result.route)routes++;
      if(result.ready&&result.pioneer)pioneers++;
      total+=result.value;
    }
    const plan={...candidate,value:total/3,useful:valid===3&&hoops>=2,
-     hoopChance:hoops/3,pioneerChance:pioneers/3};
+     hoopChance:hoops/3,pioneerChance:pioneers/3,routeChance:valid===3&&routes>=2?routes/3:0};
    if(!best||plan.value>best.value)best=plan;
  }
  return best;
@@ -275,7 +299,7 @@ export function chooseCroquetShot({
 export function chooseJumpShot({balls,striker,hoop,direction,posts,arches=[],level='pro'}, ground) {
   const ball=balls[striker];
   const range=distance(ball,hoop);
-  if((hoop.z-ball.z)*direction<=R||range>18||ground.reliability>=.8||ground.type==='roquet')return null;
+  if((hoop.z-ball.z)*direction<=R||range>18||ground.reliability>=.8||ground.type==='roquet'||ground.type==='defensive-clearance')return null;
   const blockers=[...balls.filter((other,i)=>i!==striker&&other.entered)
     .map(other=>({...other,r:R})),...posts];
   const dx=hoop.x-ball.x,dz=hoop.z-ball.z;
