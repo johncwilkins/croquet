@@ -68,3 +68,11 @@ assert.equal(chooseBreakShot(safeOpponent).type,'approach','skip the same ball w
 const openOwnHoop={...defenseState,balls:[{...defenseState.balls[0],z:2},defenseState.balls[1]]};
 assert.equal(chooseBreakShot(openOwnHoop).type,'hoop','take an easy point before a defensive chase');
 console.log('PASS: purposeful clearances, dead-ball defense, and easy wicket priority');
+
+const golfPressure={balls:[{x:2,z:-.7,entered:true,side:0},{x:0,z:2,entered:true,side:1}],
+ striker:0,hoop:{x:0,z:0},direction:-1,posts};
+assert.equal(chooseShot({...golfPressure,level:'master'}).type,'clearance','a reliable Golf clearance can deny a point');
+assert.equal(chooseShot({...golfPressure,level:'amateur'}).type,'block','use a block when the same clearance is unreliable');
+const golfTapIn={...golfPressure,balls:[{x:0,z:1.2,entered:true,side:0},{x:1.2,z:1.5,entered:true,side:1}]};
+assert.equal(chooseShot({...golfTapIn,level:'master'}).type,'hoop','take the easy Golf wicket');
+console.log('PASS: Golf clearance selection uses difficulty and preserves easy points');
